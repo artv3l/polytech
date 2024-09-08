@@ -1,0 +1,14 @@
+# binaries
+bin/
+obj/
+
+# Visual Studio files
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.vcxitems
+*.vcxitems.filters
+
+vcpkg_installed/
