@@ -13,4 +13,5 @@ workspace "supercomputers"
     configurations { "Debug", "Release" }
 
 include "labs-openmp"
-include "labs-mpi"
+include "lab4"
+include "lab5"

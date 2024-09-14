@@ -1,4 +1,4 @@
-project "labs-mpi"
+project "lab5"
     kind "ConsoleApp"
     language "C++"
     cppdialect "C++17"
