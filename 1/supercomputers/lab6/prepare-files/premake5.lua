@@ -1,0 +1,15 @@
+project "prepare-files"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++17"
+    
+    files { "**.hpp", "**.cpp" }
+
+    filter "configurations:Debug"
+        defines { "DEBUG" }
+        symbols "On"
+        
+    filter "configurations:Release"
+        defines { "NDEBUG" }
+        symbols "Off"
+        optimize "On"
