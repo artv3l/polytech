@@ -46,15 +46,19 @@ void prepareFiles(const Matrix& a, const Matrix& b, size_t nProcesses, std::func
 int main(int argc, char** argv)
 {
     const Matrix a = {
-        {1, 2, 3, -7},
-        {5, -2, 7, 1},
-        {-1, 9, 0, 4}
+        {1, 2, 3, -7, 7, -4},
+        {5, -2, 7, 1, 15, 1},
+        {-1, 9, 0, 4, 0, -9},
+        {8, 3, -5, 5, 2, 3},
+        {88, 3, 2, -15, 0, 1}
     };
     const Matrix b = {
-        {1, 2, -6},
-        {5, 6, 2},
-        {-4, 2, 0},
-        {2, 9, 4}
+        {1, 2, -6, 4, 4},
+        {5, 6, 2, 2, -8},
+        {-4, 2, 0, 3, 3},
+        {2, 9, 4, 1, 0},
+        {8, 2, -9, 0, 3},
+        {0, 3, 5, 6, -6}
     };
     
     auto getFile = [](size_t process) -> std::ofstream {

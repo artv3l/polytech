@@ -61,10 +61,11 @@ int main(int argc, char** argv)
     for (auto& vec : columns)
         readVector(vec, columnIndices);
     
+    // Размер результирующей матрицы
     size_t res_n = 0, res_m = 0;
     file >> res_n >> res_m;
 
-    // Результат - строки
+    // Результат - строки. У каждого процесса по строке
     std::vector<std::vector<int>> result(res_n, std::vector(res_m, 0));
 
     for (size_t iRow = 0; iRow < rowsBatch; iRow++) {
@@ -73,50 +74,57 @@ int main(int argc, char** argv)
 
         // Цикл по своим столбцам
         for (size_t i = 0; i < columnsBatch; i++) {
-            
-
             bool isColumnExist = (i < nColumns);
 
-            // Обрабатываемый столбец
-            // В начале берем свой. Потом будет меняться в зависимости от того, что получили от соседей (не может быть nullptr)
             std::vector<int> buf(nElems, 0);
+            // Обрабатываемый столбец. В начале берем свой. Потом будет меняться в зависимости от того, что получили от соседей (не может быть nullptr)
             auto* column = isColumnExist ? &columns[i] : &buf;
 
-            // Реальный! Индекс столбца, который обрабатываем. В начале это свой. Потом передаем по кругу и получаем индекс соседей
+            // Реальный индекс столбца, который обрабатываем. В начале это свой. Потом передаем по кругу и получаем индекс соседей
             size_t iColumn = isColumnExist ? columnIndices[i] : 0;
 
             // Цикл по чужим столбцам. Передаем по кругу
             for (size_t j = 0; j < columnsBatch * nProcesses; j++) {
+                // Если и столбец и строка есть - умножаем
                 if (row && isColumnExist) {
-                    std::cout << "rank=" << rank << ", mult " << rowIndices[iRow] << " * " << iColumn << "\n";
                     result[rowIndices[iRow]][iColumn] = mult(*row, *column);
+                    //std::cout << "rank=" << rank << ", mult " << rowIndices[iRow] << " * " << iColumn << "\n";
                 }
 
                 int nextRank = (rank + 1) % nProcesses; // Следующий процесс в кольце
                 int prevRank = (rank - 1 + nProcesses) % nProcesses; // Предыдущий процесс в кольце
 
+                // Передаем флаг, существует ли столбец который передадим дальше
+                // Если не существует, дальше будут переданы какие-то данные, на них не нужно обращать внимание
                 MPI_Status status;
                 int exist = static_cast<int>(isColumnExist);
                 MPI_Sendrecv_replace(&exist, 1, MPI_INT, nextRank, 0, prevRank, 0, MPI_COMM_WORLD, &status);
-
-                MPI_Sendrecv_replace(column->data(), nElems,
-                                     MPI_INT, nextRank, iColumn, prevRank, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-                iColumn = status.MPI_TAG;
                 isColumnExist = exist;
 
-
+                // Обмен столбцами по кругу. Обязательно нужно что-то принять и передать
+                MPI_Sendrecv_replace(column->data(), nElems,
+                                     MPI_INT, nextRank, iColumn, prevRank, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+                iColumn = status.MPI_TAG; // Реальный индекс столбца передаем через tag
             }
         }
     }
 
-    std::cout << "res rank=" << rank << "\n";
-    for (auto vec : result) {
-        for (int v : vec) {
-            std::cout << v << " ";
-        }
-        std::cout << "\n";
-    }
+    // Одномерный массив с результатом, будем передавать его в главный (rank = 0) процесс
+    std::vector<int> res;
+    for (auto vec : result)
+        for (int v : vec)
+            res.push_back(v);
 
+    std::vector<int> mainres(res.size(), 0);
+    MPI_Reduce(res.data(), mainres.data(), res.size(), MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    if (rank == 0) {
+        for (size_t i = 0; i < res_n; i++) {
+            std::copy_n(mainres.cbegin() + (i * res_m), res_m, std::ostream_iterator<int>(std::cout, " "));
+            std::cout << "\n";
+        }
+    }
+    
     MPI_Finalize();
 
     return 0;
