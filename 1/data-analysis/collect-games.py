@@ -7,25 +7,23 @@ import os
 from typing import Tuple, Callable
 import tqdm
 
-config_parser = configparser.ConfigParser()
-config_parser.read('config.ini')
-c_token = config_parser.get('default', 'token')
-c_username = config_parser.get('default', 'username')
-
-c_auth_headers = {'Authorization': f'Bearer {c_token}'}
 
 c_urls = {
     'exportGames': 'https://lichess.org/api/games/user/{}',
     'getUserPublicData': 'https://lichess.org/api/user/{}'
 }
 
+
+def get_auth_headers(token: str):
+    return {'Authorization': f'Bearer {token}'}
+
 def get_user_games_count(username: str, token: str):
-    headers = c_auth_headers
+    headers = get_auth_headers(token)
     responce = requests.get(c_urls['getUserPublicData'].format(username), headers=headers)
     return responce.json()['count']['all']
 
 def export_games(username: str, token: str, callback:Callable[[], None]=None, count: int=None):
-    headers = c_auth_headers | {
+    headers = get_auth_headers(token) | {
         'Accept': 'application/x-ndjson'
     }
     params = {
@@ -58,7 +56,13 @@ def export_games_to_file(filename: str, username: str, token: str, count: int=No
 
     return (len(games), export_time)
 
+
 def main():
+    config_parser = configparser.ConfigParser()
+    config_parser.read('config.ini')
+    c_token = config_parser.get('default', 'token')
+    c_username = config_parser.get('default', 'username')
+
     c_filename = f'games-{c_username}.json'
 
     if os.path.exists(c_filename):
@@ -66,7 +70,5 @@ def main():
         os.remove(c_filename)
 
     (exported_games_count, export_time) = export_games_to_file(c_filename, c_username, c_token)
-
-    #print(f'Export {exported_games_count} games in {export_time}.')
 
 main()

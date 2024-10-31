@@ -2,24 +2,24 @@ import json
 import configparser
 from datetime import datetime
 
+import pandas as pd
 import matplotlib.pyplot as plt
 
-config_parser = configparser.ConfigParser()
-config_parser.read('config.ini')
-c_username = config_parser.get('default', 'username')
 
-c_filename = f'games-{c_username}.json'
+def load_file(filename: str) -> pd.DataFrame:
+    games = pd.read_json(filename)
+    games['createdAt'] = pd.to_datetime(games['createdAt'], unit='ms')
+    games['lastMoveAt'] = pd.to_datetime(games['lastMoveAt'], unit='ms')
+    return games
+
+def filter_type(games: pd.DataFrame) -> pd.DataFrame:
+    return games.loc[(games['rated'] == True) & (games['variant'] == 'standard') & (games['speed'] == 'blitz')]
+
+def filter_date(games: pd.DataFrame, begin: datetime, end: datetime) -> pd.DataFrame:
+    return games.loc[(games['createdAt'] > begin) & (games['createdAt'] < end)]
 
 
-def load_filter_games(filename):
-    games_filter = lambda game: game['rated'] and (game['variant'] == 'standard') and (game['speed'] == 'blitz')
-
-    with open(filename, 'r') as file:
-        games = json.load(file)
-    return list(filter(games_filter, games))
-
-
-def plot_time(games):
+def plot_time(games: pd.DataFrame):
     time_of_day_counts = {
         'night': 0,
         'morning': 0,
@@ -27,9 +27,8 @@ def plot_time(games):
         'evening': 0
     }
 
-    for game in games:
-        t = int(game['createdAt']) / 1000
-        time = datetime.utcfromtimestamp(t)
+    for index, game in games.iterrows():
+        time = game['createdAt']
 
         if time.hour >= 2 and time.hour < 8:
             time_of_day_counts['night'] += 1
@@ -48,17 +47,11 @@ def plot_time(games):
     plt.ylabel('games count')
     plt.show()
 
-
-def plot_rating(games, username, firstDate='2020-01-01', lastDate=datetime.now().strftime('%Y-%m-%d')):
+def plot_rating(games, username):
     x, y_user, y_opponent = [], [], []
 
-    for game in reversed(games):
-        t = int(game['createdAt']) / 1000
-        time = datetime.utcfromtimestamp(t).strftime('%Y-%m-%d')
-        # date = str(time.year)+ "/" +str(time.month)
-        if (firstDate > time or lastDate < time):
-            continue
-        x.append(t)
+    for index, game in games.iterrows():
+        x.append(game['createdAt'])
 
         if game['players']['white']['user']['name'] == username:
             y_user.append(game['players']['white']['rating'])
@@ -77,9 +70,19 @@ def plot_rating(games, username, firstDate='2020-01-01', lastDate=datetime.now()
     plt.grid()
     plt.show()
 
+
 def main():
-    games = load_filter_games(c_filename)
+    config_parser = configparser.ConfigParser()
+    config_parser.read('config.ini')
+    c_username = config_parser.get('default', 'username')
+
+    c_filename = f'games-{c_username}.json'
+
+    games = filter_type(load_file(c_filename))
+
+    games = filter_date(games, '2020-09-25', '2024-09-30')
+
     plot_time(games)
-    plot_rating(games, c_username, '2024-09-25', '2024-09-30')
+    plot_rating(games, c_username)
 
 main()
