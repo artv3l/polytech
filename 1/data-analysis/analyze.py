@@ -1,9 +1,13 @@
 import json
 import configparser
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pandas as pd
 import matplotlib.pyplot as plt
+
+
+def timedelta_get_total_microseconds(td: timedelta) -> int:
+    return int(td.total_seconds() * 10**6)
 
 
 def parse_players_info(row, username):
@@ -28,6 +32,7 @@ def parse_game_result(row, username):
 def load_file(filename: str, username: str) -> pd.DataFrame:
     games = filter_type(pd.read_json(filename))
     games['createdAt'] = pd.to_datetime(games['createdAt'], unit='ms')
+    games['createdAt'] = games['createdAt'] + timedelta(hours=3) # timezone Moskow
     games['lastMoveAt'] = pd.to_datetime(games['lastMoveAt'], unit='ms')
 
     ppi = lambda x: pd.Series(parse_players_info(x, username))
@@ -44,32 +49,22 @@ def filter_date(games: pd.DataFrame, begin: datetime, end: datetime) -> pd.DataF
     return games.loc[(games['createdAt'] > begin) & (games['createdAt'] < end)]
 
 
-def plot_time(games: pd.DataFrame):
-    time_of_day_counts = {
-        'night': 0,
-        'morning': 0,
-        'day': 0,
-        'evening': 0
-    }
+def plot_time(games: pd.DataFrame, interval: timedelta):
+    def get_time_from_midnight(dt) -> int:
+        return timedelta_get_total_microseconds(dt - dt.replace(hour=0, minute=0, second=0, microsecond=0))
 
-    for index, game in games.iterrows():
-        time = game['createdAt']
+    games['createdAt_from_midnight'] = games['createdAt'].apply(lambda x: get_time_from_midnight(x))
 
-        if time.hour >= 2 and time.hour < 8:
-            time_of_day_counts['night'] += 1
-        elif time.hour >= 8 and time.hour < 14:
-            time_of_day_counts['morning'] += 1
-        elif time.hour >= 14 and time.hour < 20:
-            time_of_day_counts['day'] += 1
-        else:
-            time_of_day_counts['evening'] += 1
+    step = timedelta_get_total_microseconds(interval)
+    end = timedelta_get_total_microseconds(timedelta(days=1))
+    bins = [i for i in range(0, end+step, step)]
+    labels = [f'{timedelta(microseconds=i)} ->' for i in range(0, end, step)]
+    
+    games['createdAt_from_midnight_bins'] = pd.cut(games['createdAt_from_midnight'], bins=bins, labels=labels)
+    stats = games.groupby('createdAt_from_midnight_bins', observed=False)['id'].count()
 
-    labels = list(time_of_day_counts.keys())
-    counts = list(time_of_day_counts.values())
-
-    plt.bar(labels, counts, color=['blue', 'orange', 'green', 'red'])
-    plt.xlabel('time')
-    plt.ylabel('games count')
+    plt.bar(stats.index.tolist(), stats.values)
+    plt.xticks(rotation=45, ha='right')
     plt.show()
 
 def plot_rating(games, username):
@@ -131,6 +126,8 @@ def main():
     games = filter_date(games, '2020-09-25', '2024-09-30')
 
     merge_value = 20 # 5 .. 25
-    plot_rating_diff(games, merge_value)
+    #plot_rating_diff(games, merge_value)
+
+    plot_time(games, timedelta(hours=1))
 
 main()
