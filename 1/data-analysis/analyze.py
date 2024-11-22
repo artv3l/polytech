@@ -28,6 +28,10 @@ def parse_game_result(row, username):
     else:
         return 'lose'
 
+def parse_game_points(row):
+    if row['game_result'] == 'draw': return 0
+    elif row['game_result'] == 'win': return 1
+    else: return -1
 
 def load_file(filename: str, username: str) -> pd.DataFrame:
     games = filter_type(pd.read_json(filename))
@@ -42,8 +46,16 @@ def load_file(filename: str, username: str) -> pd.DataFrame:
 
     return games
 
+def filter_moves_count(games: pd.DataFrame, moves_count: int) -> pd.DataFrame:
+    return games[games['moves'].map(lambda x: (len(x.split()) / 2) > moves_count)]
+
+# standard rated blitz 3+2, more 5 moves
 def filter_type(games: pd.DataFrame) -> pd.DataFrame:
-    return games.loc[(games['rated'] == True) & (games['variant'] == 'standard') & (games['speed'] == 'blitz')]
+    games = games.loc[(games['rated'] == True) & (games['variant'] == 'standard') & (games['speed'] == 'blitz')]
+    games = games[games['clock'].map(lambda x: ('initial' in x) and (x['initial'] == 180))]
+    games = games[games['clock'].map(lambda x: ('increment' in x) and (x['increment'] == 2))]
+    games = filter_moves_count(games, 5)
+    return games
 
 def filter_date(games: pd.DataFrame, begin: datetime, end: datetime) -> pd.DataFrame:
     return games.loc[(games['createdAt'] > begin) & (games['createdAt'] < end)]
@@ -93,13 +105,8 @@ def plot_rating(games, username):
 def plot_rating_diff(games: pd.DataFrame, merge_value: int):
     games = games.copy()
 
-    def get_points(game_result):
-        if game_result == 'draw': return 0
-        elif game_result == 'win': return 1
-        else: return -1
-
     games['rating_delta'] = games['rating'] - games['opponent_rating']
-    games['points'] = games['game_result'].apply(lambda x: get_points(x))
+    games['points'] = games.apply(lambda x: parse_game_points(x), axis=1)
 
     games = games.loc[abs(games['rating_delta']) < 300]
 
@@ -110,6 +117,30 @@ def plot_rating_diff(games: pd.DataFrame, merge_value: int):
 
     games['rating_delta_bins'] = pd.cut(games['rating_delta'], bins=bins, labels=labels)
     stats = games.groupby('rating_delta_bins', observed=False)['points'].sum()
+
+    plt.plot(stats.index.tolist(), stats.values)
+    plt.show()
+
+def plot_winrate_by_game_time(games: pd.DataFrame, username):
+    def parse_clock(row, username):
+        result = {}
+        (player_color, opponent_color) = ('white', 'black') if row['players']['white']['user']['name'] == username else ('black', 'white')
+        white_clock = row['clocks'][::2]
+        black_clock = row['clocks'][1::2]
+        result['clock'] = white_clock if player_color == 'white' else black_clock
+        result['opponent_clock'] = black_clock if player_color == 'white' else white_clock
+        return result
+
+    games['points'] = games.apply(lambda x: parse_game_points(x), axis=1)
+    games[['clock', 'opponent_clock']] = games.apply(lambda x: pd.Series(parse_clock(x, username)), axis=1)
+    games['think_time'] = games['clock'].apply(lambda x: int((x[0] - x[-1]) / 100))
+    #games['opponent_think_time'] = games['opponent_clock'].apply(lambda x: int((x[0] - x[-1]) / 100))
+
+    bins = [i for i in range(0, 181, 5)]
+    labels = bins[1:]
+
+    games['think_time_bins'] = pd.cut(games['think_time'], bins=bins, labels=labels)
+    stats = games.groupby('think_time_bins', observed=False)['points'].sum()
 
     plt.plot(stats.index.tolist(), stats.values)
     plt.show()
@@ -128,6 +159,8 @@ def main():
     merge_value = 20 # 5 .. 25
     #plot_rating_diff(games, merge_value)
 
-    plot_time(games, timedelta(hours=1))
+    #plot_time(games, timedelta(hours=1))
+
+    plot_winrate_by_game_time(games, c_username)
 
 main()
