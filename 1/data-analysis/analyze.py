@@ -1,9 +1,15 @@
 import json
 import configparser
 from datetime import datetime, timedelta
+from typing import Callable
+import functools
 
+import matplotlib.axes
 import pandas as pd
 import matplotlib.pyplot as plt
+
+
+PlotFunc = Callable[[pd.DataFrame, matplotlib.axes.Axes], None]
 
 
 def timedelta_get_total_microseconds(td: timedelta) -> int:
@@ -33,6 +39,16 @@ def parse_game_points(row):
     elif row['game_result'] == 'win': return 1
     else: return -1
 
+def parse_clock(row, username):
+    result = {}
+    (player_color, opponent_color) = ('white', 'black') if row['players']['white']['user']['name'] == username else ('black', 'white')
+    white_clock = row['clocks'][::2]
+    black_clock = row['clocks'][1::2]
+    result['clock'] = white_clock if player_color == 'white' else black_clock
+    result['opponent_clock'] = black_clock if player_color == 'white' else white_clock
+    return result
+
+
 def load_file(filename: str, username: str) -> pd.DataFrame:
     games = filter_type(pd.read_json(filename))
     games['createdAt'] = pd.to_datetime(games['createdAt'], unit='ms')
@@ -44,7 +60,10 @@ def load_file(filename: str, username: str) -> pd.DataFrame:
 
     games['game_result'] = games.apply(lambda x: parse_game_result(x, username), axis=1)
 
+    games[['clock', 'opponent_clock']] = games.apply(lambda x: pd.Series(parse_clock(x, username)), axis=1)
+
     return games
+
 
 def filter_moves_count(games: pd.DataFrame, moves_count: int) -> pd.DataFrame:
     return games[games['moves'].map(lambda x: (len(x.split()) / 2) > moves_count)]
@@ -61,7 +80,15 @@ def filter_date(games: pd.DataFrame, begin: datetime, end: datetime) -> pd.DataF
     return games.loc[(games['createdAt'] > begin) & (games['createdAt'] < end)]
 
 
-def plot_time(games: pd.DataFrame, interval: timedelta):
+def save_plot(games: pd.DataFrame, plot_func: PlotFunc, filename: str):
+    fig, ax = plt.subplots(nrows=1, ncols=1)
+    plot_func(games, ax)
+    fig.tight_layout()
+    fig.savefig(filename, dpi=300)
+    plt.close(fig)
+
+
+def plot_time(games: pd.DataFrame, ax: matplotlib.axes.Axes, interval: timedelta):
     def get_time_from_midnight(dt) -> int:
         return timedelta_get_total_microseconds(dt - dt.replace(hour=0, minute=0, second=0, microsecond=0))
 
@@ -75,34 +102,14 @@ def plot_time(games: pd.DataFrame, interval: timedelta):
     games['createdAt_from_midnight_bins'] = pd.cut(games['createdAt_from_midnight'], bins=bins, labels=labels)
     stats = games.groupby('createdAt_from_midnight_bins', observed=False)['id'].count()
 
-    plt.bar(stats.index.tolist(), stats.values)
-    plt.xticks(rotation=45, ha='right')
-    plt.show()
+    ax.bar(stats.index.tolist(), stats.values)
+    ax.set_xticks(ax.get_xticks())
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+   
+def plot_rating(games: pd.DataFrame, ax: matplotlib.axes.Axes):
+    games.plot(x='createdAt', y='rating', ax=ax, xlabel='Дата', ylabel='Рейтинг')
 
-def plot_rating(games, username):
-    x, y_user, y_opponent = [], [], []
-
-    for index, game in games.iterrows():
-        x.append(game['createdAt'])
-
-        if game['players']['white']['user']['name'] == username:
-            y_user.append(game['players']['white']['rating'])
-            y_opponent.append(game['players']['black']['rating'])
-        else:
-            y_user.append(game['players']['black']['rating'])
-            y_opponent.append(game['players']['white']['rating'])
-
-    plt.plot(x, y_opponent)
-    plt.plot(x, y_user)
-
-    plt.xticks([])
-    plt.xlabel('time')
-    plt.ylabel('rate')
-    plt.legend()
-    plt.grid()
-    plt.show()
-
-def plot_rating_diff(games: pd.DataFrame, merge_value: int):
+def plot_rating_diff(games: pd.DataFrame, ax: matplotlib.axes.Axes, merge_value: int):
     games = games.copy()
 
     games['rating_delta'] = games['rating'] - games['opponent_rating']
@@ -118,23 +125,11 @@ def plot_rating_diff(games: pd.DataFrame, merge_value: int):
     games['rating_delta_bins'] = pd.cut(games['rating_delta'], bins=bins, labels=labels)
     stats = games.groupby('rating_delta_bins', observed=False)['points'].sum()
 
-    plt.plot(stats.index.tolist(), stats.values)
-    plt.show()
+    ax.plot(stats.index.tolist(), stats.values)
 
-def plot_winrate_by_game_time(games: pd.DataFrame, username):
-    def parse_clock(row, username):
-        result = {}
-        (player_color, opponent_color) = ('white', 'black') if row['players']['white']['user']['name'] == username else ('black', 'white')
-        white_clock = row['clocks'][::2]
-        black_clock = row['clocks'][1::2]
-        result['clock'] = white_clock if player_color == 'white' else black_clock
-        result['opponent_clock'] = black_clock if player_color == 'white' else white_clock
-        return result
-
+def plot_winrate_by_game_time(games: pd.DataFrame, ax: matplotlib.axes.Axes):
     games['points'] = games.apply(lambda x: parse_game_points(x), axis=1)
-    games[['clock', 'opponent_clock']] = games.apply(lambda x: pd.Series(parse_clock(x, username)), axis=1)
     games['think_time'] = games['clock'].apply(lambda x: int((x[0] - x[-1]) / 100))
-    #games['opponent_think_time'] = games['opponent_clock'].apply(lambda x: int((x[0] - x[-1]) / 100))
 
     bins = [i for i in range(0, 181, 5)]
     labels = bins[1:]
@@ -142,25 +137,21 @@ def plot_winrate_by_game_time(games: pd.DataFrame, username):
     games['think_time_bins'] = pd.cut(games['think_time'], bins=bins, labels=labels)
     stats = games.groupby('think_time_bins', observed=False)['points'].sum()
 
-    plt.plot(stats.index.tolist(), stats.values)
-    plt.show()
+    ax.plot(stats.index.tolist(), stats.values)
 
 
 def main():
     config_parser = configparser.ConfigParser()
     config_parser.read('config.ini')
     c_username = config_parser.get('default', 'username')
-
-    c_filename = f'games-{c_username}.json'
+    c_filename = f'data/games-{c_username}.json'
 
     games = load_file(c_filename, c_username)
     games = filter_date(games, '2020-09-25', '2024-09-30')
 
-    merge_value = 20 # 5 .. 25
-    #plot_rating_diff(games, merge_value)
-
-    #plot_time(games, timedelta(hours=1))
-
-    plot_winrate_by_game_time(games, c_username)
+    save_plot(games, plot_rating, 'plots/rating.png')
+    save_plot(games, functools.partial(plot_time, interval=timedelta(hours=1)), 'plots/time.png')
+    save_plot(games, functools.partial(plot_rating_diff, merge_value=15), 'plots/rating_diff.png')
+    save_plot(games, plot_winrate_by_game_time, 'plots/winrate_by_game_time.png')
 
 main()
