@@ -103,42 +103,74 @@ def plot_time(games: pd.DataFrame, ax: matplotlib.axes.Axes, interval: timedelta
     stats = games.groupby('createdAt_from_midnight_bins', observed=False)['id'].count()
 
     ax.bar(stats.index.tolist(), stats.values)
+    ax.set_xlabel('Время суток'); ax.set_ylabel('Кол-во игр')
     ax.set_xticks(ax.get_xticks())
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
    
 def plot_rating(games: pd.DataFrame, ax: matplotlib.axes.Axes):
-    games.plot(x='createdAt', y='rating', ax=ax, xlabel='Дата', ylabel='Рейтинг')
+    games.plot(x='createdAt', y='rating', ax=ax, xlabel='Дата', ylabel='Рейтинг', legend=False)
 
 def plot_rating_diff(games: pd.DataFrame, ax: matplotlib.axes.Axes, merge_value: int):
+    c_min_games_count = 20
+
     games = games.copy()
 
     games['rating_delta'] = games['rating'] - games['opponent_rating']
-    games['points'] = games.apply(lambda x: parse_game_points(x), axis=1)
-
     games = games.loc[abs(games['rating_delta']) < 300]
 
     min_delta, max_delta = games['rating_delta'].min(), games['rating_delta'].max()
     
     bins = [i for i in range(min_delta, max_delta, merge_value)]
     labels = [(i+(merge_value/2)) for i in range(min_delta, max_delta-merge_value, merge_value)]
-
     games['rating_delta_bins'] = pd.cut(games['rating_delta'], bins=bins, labels=labels)
-    stats = games.groupby('rating_delta_bins', observed=False)['points'].sum()
 
-    ax.plot(stats.index.tolist(), stats.values)
+    agg_dict = {
+        'game_result': ['count',
+                        lambda val: (val == 'win').sum(),
+                        lambda val: (val == 'lose').sum(),
+                        lambda val: (val == 'draw').sum(),]
+        }
+    axis = ['count', 'win_count', 'lose_count', 'draw_count']
+    stats = games.groupby('rating_delta_bins', observed=False).agg(agg_dict).set_axis(axis, axis=1)
+    stats = stats[stats['count'] > c_min_games_count]
+    stats['winrate'] = stats['win_count'] / stats['count']
+    stats['loserate'] = stats['lose_count'] / stats['count']
+    stats['drawrate'] = stats['draw_count'] / stats['count']
+
+    ax.plot(stats.index.tolist(), stats['winrate'], label='Winrate')
+    ax.plot(stats.index.tolist(), stats['loserate'], label='Loserate')
+    ax.set_xlabel('Разница в рейтинге'); ax.set_ylabel('Процент побед / поражений'); plt.legend()
+    ax.axhline(y=0.5, color='r', linestyle='--')
 
 def plot_winrate_by_game_time(games: pd.DataFrame, ax: matplotlib.axes.Axes):
+    c_min_games_count = 10
+
     games['points'] = games.apply(lambda x: parse_game_points(x), axis=1)
     games['think_time'] = games['clock'].apply(lambda x: int((x[0] - x[-1]) / 100))
 
-    bins = [i for i in range(0, 181, 5)]
+    bins = [i for i in range(0, 181, 5)] # TODO merge_value
     labels = bins[1:]
-
     games['think_time_bins'] = pd.cut(games['think_time'], bins=bins, labels=labels)
-    stats = games.groupby('think_time_bins', observed=False)['points'].sum()
 
-    ax.plot(stats.index.tolist(), stats.values)
+    # TODO Расчет винрейта скопирован из plot_rating_diff
+    agg_dict = {
+        'game_result': ['count',
+                        lambda val: (val == 'win').sum(),
+                        lambda val: (val == 'lose').sum(),
+                        lambda val: (val == 'draw').sum(),]
+        }
+    axis = ['count', 'win_count', 'lose_count', 'draw_count']
+    stats = games.groupby('think_time_bins', observed=False).agg(agg_dict).set_axis(axis, axis=1)
+    stats = stats[stats['count'] > c_min_games_count]
+    stats['winrate'] = stats['win_count'] / stats['count']
+    stats['loserate'] = stats['lose_count'] / stats['count']
+    stats['drawrate'] = stats['draw_count'] / stats['count']
 
+    ax.plot(stats.index.tolist(), stats['winrate'], label='Winrate')
+    ax.plot(stats.index.tolist(), stats['loserate'], label='Loserate')
+    ax.plot(stats.index.tolist(), stats['drawrate'], label='Drawrate') # TODO в отдельный график
+    ax.set_xlabel('Время на игру'); ax.set_ylabel('Процент побед / поражений'); plt.legend()
+    ax.axhline(y=0.5, color='r', linestyle='--')
 
 def main():
     config_parser = configparser.ConfigParser()
@@ -151,7 +183,7 @@ def main():
 
     save_plot(games, plot_rating, 'plots/rating.png')
     save_plot(games, functools.partial(plot_time, interval=timedelta(hours=1)), 'plots/time.png')
-    save_plot(games, functools.partial(plot_rating_diff, merge_value=15), 'plots/rating_diff.png')
-    save_plot(games, plot_winrate_by_game_time, 'plots/winrate_by_game_time.png')
+    save_plot(games, functools.partial(plot_rating_diff, merge_value=10), 'plots/rating_diff.png')
+    save_plot(games, plot_winrate_by_game_time, 'plots/winrate_by_think_time.png')
 
 main()
