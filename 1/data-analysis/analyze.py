@@ -1,15 +1,16 @@
 import json
-import configparser
 from datetime import datetime, timedelta
 from typing import Callable, List
 import functools
-import os
 
+import configparser
 import matplotlib.axes
 import matplotlib.figure
 import pandas as pd
 import matplotlib.pyplot as plt
 
+import config
+import dbase
 
 PlotFunc = Callable[[pd.DataFrame], List[matplotlib.figure.Figure]]
 
@@ -51,18 +52,21 @@ def parse_clock(row, username):
     return result
 
 
-def load_file(filename: str, username: str) -> pd.DataFrame:
-    games = filter_type(pd.read_json(filename))
+def load_data(filename: str, username: str) -> pd.DataFrame:
+    start_time = datetime.now()
+    games = pd.DataFrame(list(dbase.coll.find()))
+    print(f'Load data - {datetime.now() - start_time}')
+
+    start_time = datetime.now()
+    games = filter_type(games)
     games['createdAt'] = pd.to_datetime(games['createdAt'], unit='ms')
     games['createdAt'] = games['createdAt'] + timedelta(hours=3) # timezone Moskow
     games['lastMoveAt'] = pd.to_datetime(games['lastMoveAt'], unit='ms')
-
     ppi = lambda x: pd.Series(parse_players_info(x, username))
     games[['rating', 'ratingDiff', 'opponent_rating', 'opponent_ratingDiff']] = games['players'].apply(ppi)
-
     games['game_result'] = games.apply(lambda x: parse_game_result(x, username), axis=1)
-
     games[['clock', 'opponent_clock']] = games.apply(lambda x: pd.Series(parse_clock(x, username)), axis=1)
+    print(f'Prepare data - {datetime.now() - start_time}')
 
     return games
 
@@ -119,6 +123,21 @@ def plot_rating(games: pd.DataFrame) -> List[matplotlib.figure.Figure]:
     games.plot(x='createdAt', y='rating', ax=ax, xlabel='Дата', ylabel='Рейтинг', legend=False)
     return [fig]
 
+def calc_winrate_in_bin(games: pd.DataFrame, min_games_count: int, bin_name: str):
+    agg_dict = {
+        'game_result': ['count',
+                        lambda val: (val == 'win').sum(),
+                        lambda val: (val == 'lose').sum(),
+                        lambda val: (val == 'draw').sum(),]
+        }
+    axis = ['count', 'win_count', 'lose_count', 'draw_count']
+    stats = games.groupby(bin_name, observed=False).agg(agg_dict).set_axis(axis, axis=1)
+    stats = stats[stats['count'] > min_games_count]
+    stats['winrate'] = stats['win_count'] / stats['count']
+    stats['loserate'] = stats['lose_count'] / stats['count']
+    stats['drawrate'] = stats['draw_count'] / stats['count']
+    return stats
+
 def plot_rating_diff(games: pd.DataFrame, merge_value: int) -> List[matplotlib.figure.Figure]:
     c_min_games_count = 20
 
@@ -133,18 +152,7 @@ def plot_rating_diff(games: pd.DataFrame, merge_value: int) -> List[matplotlib.f
     labels = [(i+(merge_value/2)) for i in range(min_delta, max_delta-merge_value, merge_value)]
     games['rating_delta_bins'] = pd.cut(games['rating_delta'], bins=bins, labels=labels)
 
-    agg_dict = {
-        'game_result': ['count',
-                        lambda val: (val == 'win').sum(),
-                        lambda val: (val == 'lose').sum(),
-                        lambda val: (val == 'draw').sum(),]
-        }
-    axis = ['count', 'win_count', 'lose_count', 'draw_count']
-    stats = games.groupby('rating_delta_bins', observed=False).agg(agg_dict).set_axis(axis, axis=1)
-    stats = stats[stats['count'] > c_min_games_count]
-    stats['winrate'] = stats['win_count'] / stats['count']
-    stats['loserate'] = stats['lose_count'] / stats['count']
-    stats['drawrate'] = stats['draw_count'] / stats['count']
+    stats = calc_winrate_in_bin(games, c_min_games_count, 'rating_delta_bins')
 
     fig, ax = plt.subplots(nrows=1, ncols=1)
     ax.plot(stats.index.tolist(), stats['winrate'], label='Winrate')
@@ -153,7 +161,7 @@ def plot_rating_diff(games: pd.DataFrame, merge_value: int) -> List[matplotlib.f
     ax.axhline(y=0.5, color='r', linestyle='--')
     return [fig]
 
-def plot_winrate_by_game_time(games: pd.DataFrame, merge_value: int) -> List[matplotlib.figure.Figure]:
+def calc_winrate_by_game_time(games: pd.DataFrame, merge_value: int):
     c_min_games_count = 10
 
     games['points'] = games.apply(lambda x: parse_game_points(x), axis=1)
@@ -163,19 +171,11 @@ def plot_winrate_by_game_time(games: pd.DataFrame, merge_value: int) -> List[mat
     labels = bins[1:]
     games['think_time_bins'] = pd.cut(games['think_time'], bins=bins, labels=labels)
 
-    # TODO Расчет винрейта скопирован из plot_rating_diff
-    agg_dict = {
-        'game_result': ['count',
-                        lambda val: (val == 'win').sum(),
-                        lambda val: (val == 'lose').sum(),
-                        lambda val: (val == 'draw').sum(),]
-        }
-    axis = ['count', 'win_count', 'lose_count', 'draw_count']
-    stats = games.groupby('think_time_bins', observed=False).agg(agg_dict).set_axis(axis, axis=1)
-    stats = stats[stats['count'] > c_min_games_count]
-    stats['winrate'] = stats['win_count'] / stats['count']
-    stats['loserate'] = stats['lose_count'] / stats['count']
-    stats['drawrate'] = stats['draw_count'] / stats['count']
+    stats = calc_winrate_in_bin(games, c_min_games_count, 'think_time_bins')
+    return stats
+
+def plot_winrate_by_game_time(games: pd.DataFrame, merge_value: int) -> List[matplotlib.figure.Figure]:
+    stats = calc_winrate_by_game_time(games, merge_value)
 
     fig1, ax = plt.subplots(nrows=1, ncols=1)
     ax.plot(stats.index.tolist(), stats['winrate'], label='Winrate')
@@ -191,22 +191,13 @@ def plot_winrate_by_game_time(games: pd.DataFrame, merge_value: int) -> List[mat
 
     
 def main():
-    os.chdir('1/data-analysis') # TODO-Remove: For Visual Studio debug
-
-    config_parser = configparser.ConfigParser()
-    config_parser.read('config.ini')
-    c_username = config_parser.get('default', 'username')
-    c_filename = f'data/games-{c_username}.json'
-
-    start_time = datetime.now()
-    games = load_file(c_filename, c_username)
+    games = load_data(config.c_filename, config.c_username)
     games = filter_date(games, '2020-09-25', '2024-09-30')
-    print(f'Load and prepare file - {datetime.now() - start_time}')
 
     save_plot(games, plot_rating, ['plots/rating.png'])
     save_plot(games, functools.partial(plot_time, interval=timedelta(hours=1)), ['plots/time.png'])
     save_plot(games, functools.partial(plot_rating_diff, merge_value=10), ['plots/rating_diff.png'])
     save_plot(games, functools.partial(plot_winrate_by_game_time, merge_value=10), ['plots/winrate_by_think_time.png', 'plots/drawrate_by_think_time.png'])
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
