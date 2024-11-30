@@ -1,15 +1,17 @@
 import json
 import configparser
 from datetime import datetime, timedelta
-from typing import Callable
+from typing import Callable, List
 import functools
+import os
 
 import matplotlib.axes
+import matplotlib.figure
 import pandas as pd
 import matplotlib.pyplot as plt
 
 
-PlotFunc = Callable[[pd.DataFrame, matplotlib.axes.Axes], None]
+PlotFunc = Callable[[pd.DataFrame], List[matplotlib.figure.Figure]]
 
 
 def timedelta_get_total_microseconds(td: timedelta) -> int:
@@ -80,15 +82,18 @@ def filter_date(games: pd.DataFrame, begin: datetime, end: datetime) -> pd.DataF
     return games.loc[(games['createdAt'] > begin) & (games['createdAt'] < end)]
 
 
-def save_plot(games: pd.DataFrame, plot_func: PlotFunc, filename: str):
-    fig, ax = plt.subplots(nrows=1, ncols=1)
-    plot_func(games, ax)
-    fig.tight_layout()
-    fig.savefig(filename, dpi=300)
-    plt.close(fig)
+def save_plot(games: pd.DataFrame, plot_func: PlotFunc, filenames: List[str]):
+    start_time = datetime.now()
+    figures = plot_func(games)
+    calc_time = datetime.now() - start_time
+    print(f'{filenames} - {calc_time}')
+    for fig, filename in zip(figures, filenames):
+        fig.tight_layout()
+        fig.savefig(filename, dpi=300)
+        plt.close(fig)
 
 
-def plot_time(games: pd.DataFrame, ax: matplotlib.axes.Axes, interval: timedelta):
+def plot_time(games: pd.DataFrame, interval: timedelta) -> List[matplotlib.figure.Figure]:
     def get_time_from_midnight(dt) -> int:
         return timedelta_get_total_microseconds(dt - dt.replace(hour=0, minute=0, second=0, microsecond=0))
 
@@ -102,15 +107,19 @@ def plot_time(games: pd.DataFrame, ax: matplotlib.axes.Axes, interval: timedelta
     games['createdAt_from_midnight_bins'] = pd.cut(games['createdAt_from_midnight'], bins=bins, labels=labels)
     stats = games.groupby('createdAt_from_midnight_bins', observed=False)['id'].count()
 
+    fig, ax = plt.subplots(nrows=1, ncols=1)
     ax.bar(stats.index.tolist(), stats.values)
     ax.set_xlabel('Время суток'); ax.set_ylabel('Кол-во игр')
     ax.set_xticks(ax.get_xticks())
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+    return [fig]
    
-def plot_rating(games: pd.DataFrame, ax: matplotlib.axes.Axes):
+def plot_rating(games: pd.DataFrame) -> List[matplotlib.figure.Figure]:
+    fig, ax = plt.subplots(nrows=1, ncols=1)
     games.plot(x='createdAt', y='rating', ax=ax, xlabel='Дата', ylabel='Рейтинг', legend=False)
+    return [fig]
 
-def plot_rating_diff(games: pd.DataFrame, ax: matplotlib.axes.Axes, merge_value: int):
+def plot_rating_diff(games: pd.DataFrame, merge_value: int) -> List[matplotlib.figure.Figure]:
     c_min_games_count = 20
 
     games = games.copy()
@@ -137,18 +146,20 @@ def plot_rating_diff(games: pd.DataFrame, ax: matplotlib.axes.Axes, merge_value:
     stats['loserate'] = stats['lose_count'] / stats['count']
     stats['drawrate'] = stats['draw_count'] / stats['count']
 
+    fig, ax = plt.subplots(nrows=1, ncols=1)
     ax.plot(stats.index.tolist(), stats['winrate'], label='Winrate')
     ax.plot(stats.index.tolist(), stats['loserate'], label='Loserate')
     ax.set_xlabel('Разница в рейтинге'); ax.set_ylabel('Процент побед / поражений'); plt.legend()
     ax.axhline(y=0.5, color='r', linestyle='--')
+    return [fig]
 
-def plot_winrate_by_game_time(games: pd.DataFrame, ax: matplotlib.axes.Axes):
+def plot_winrate_by_game_time(games: pd.DataFrame, merge_value: int) -> List[matplotlib.figure.Figure]:
     c_min_games_count = 10
 
     games['points'] = games.apply(lambda x: parse_game_points(x), axis=1)
     games['think_time'] = games['clock'].apply(lambda x: int((x[0] - x[-1]) / 100))
 
-    bins = [i for i in range(0, 181, 5)] # TODO merge_value
+    bins = [i for i in range(0, 181, merge_value)]
     labels = bins[1:]
     games['think_time_bins'] = pd.cut(games['think_time'], bins=bins, labels=labels)
 
@@ -166,24 +177,36 @@ def plot_winrate_by_game_time(games: pd.DataFrame, ax: matplotlib.axes.Axes):
     stats['loserate'] = stats['lose_count'] / stats['count']
     stats['drawrate'] = stats['draw_count'] / stats['count']
 
+    fig1, ax = plt.subplots(nrows=1, ncols=1)
     ax.plot(stats.index.tolist(), stats['winrate'], label='Winrate')
     ax.plot(stats.index.tolist(), stats['loserate'], label='Loserate')
-    ax.plot(stats.index.tolist(), stats['drawrate'], label='Drawrate') # TODO в отдельный график
     ax.set_xlabel('Время на игру'); ax.set_ylabel('Процент побед / поражений'); plt.legend()
     ax.axhline(y=0.5, color='r', linestyle='--')
 
+    fig2, ax = plt.subplots(nrows=1, ncols=1)
+    ax.plot(stats.index.tolist(), stats['drawrate'], label='Drawrate')
+    ax.set_xlabel('Время на игру'); ax.set_ylabel('Процент ничьих'); plt.legend()
+
+    return [fig1, fig2]
+
+    
 def main():
+    os.chdir('1/data-analysis') # TODO-Remove: For Visual Studio debug
+
     config_parser = configparser.ConfigParser()
     config_parser.read('config.ini')
     c_username = config_parser.get('default', 'username')
     c_filename = f'data/games-{c_username}.json'
 
+    start_time = datetime.now()
     games = load_file(c_filename, c_username)
     games = filter_date(games, '2020-09-25', '2024-09-30')
+    print(f'Load and prepare file - {datetime.now() - start_time}')
 
-    save_plot(games, plot_rating, 'plots/rating.png')
-    save_plot(games, functools.partial(plot_time, interval=timedelta(hours=1)), 'plots/time.png')
-    save_plot(games, functools.partial(plot_rating_diff, merge_value=10), 'plots/rating_diff.png')
-    save_plot(games, plot_winrate_by_game_time, 'plots/winrate_by_think_time.png')
+    save_plot(games, plot_rating, ['plots/rating.png'])
+    save_plot(games, functools.partial(plot_time, interval=timedelta(hours=1)), ['plots/time.png'])
+    save_plot(games, functools.partial(plot_rating_diff, merge_value=10), ['plots/rating_diff.png'])
+    save_plot(games, functools.partial(plot_winrate_by_game_time, merge_value=10), ['plots/winrate_by_think_time.png', 'plots/drawrate_by_think_time.png'])
 
-main()
+if __name__ == "__main__":
+    main()
