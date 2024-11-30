@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timedelta
-from typing import Callable, List
+from typing import Callable, List, Any, Tuple
 import functools
 
 import configparser
@@ -8,16 +8,26 @@ import matplotlib.axes
 import matplotlib.figure
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
 import config
 import dbase
 
-PlotFunc = Callable[[pd.DataFrame], List[matplotlib.figure.Figure]]
+
+PltFigure = matplotlib.figure.Figure
+CalcFunc = Callable[[pd.DataFrame], Any] # Подготавливает данные для построения графика
+PlotFunc = Callable[[Any], List[PltFigure]] # Строит график по подготовленным данным
+OutFunc = Callable[[PltFigure], None] # Обработка графика: вывод на экран, сохранение в файл
+bind = functools.partial
 
 
 def timedelta_get_total_microseconds(td: timedelta) -> int:
     return int(td.total_seconds() * 10**6)
-
+def print_exec_time(func, title):
+    start_time = datetime.now()
+    return_value = func()
+    print(f'{title} - {datetime.now() - start_time}')
+    return return_value
 
 def parse_players_info(row, username):
     result = {}
@@ -27,7 +37,6 @@ def parse_players_info(row, username):
     result['opponent_rating'] = row[opponent_color]['rating']
     result['opponent_ratingDiff'] = row[opponent_color]['ratingDiff']
     return result
-
 def parse_game_result(row, username):
     (player_color, opponent_color) = ('white', 'black') if row['players']['white']['user']['name'] == username else ('black', 'white')
     if row['status'] == 'draw':
@@ -36,12 +45,10 @@ def parse_game_result(row, username):
         return 'win'
     else:
         return 'lose'
-
 def parse_game_points(row):
     if row['game_result'] == 'draw': return 0
     elif row['game_result'] == 'win': return 1
     else: return -1
-
 def parse_clock(row, username):
     result = {}
     (player_color, opponent_color) = ('white', 'black') if row['players']['white']['user']['name'] == username else ('black', 'white')
@@ -51,14 +58,9 @@ def parse_clock(row, username):
     result['opponent_clock'] = black_clock if player_color == 'white' else white_clock
     return result
 
-
-def load_data(filename: str, username: str) -> pd.DataFrame:
-    start_time = datetime.now()
-    games = pd.DataFrame(list(dbase.coll.find()))
-    print(f'Load data - {datetime.now() - start_time}')
-
-    start_time = datetime.now()
-    games = filter_type(games)
+def load_from_db() -> pd.DataFrame:
+    return pd.DataFrame(list(dbase.coll.find()))
+def prepare_dataframe(games: pd.DataFrame, username: str) -> pd.DataFrame:
     games['createdAt'] = pd.to_datetime(games['createdAt'], unit='ms')
     games['createdAt'] = games['createdAt'] + timedelta(hours=3) # timezone Moskow
     games['lastMoveAt'] = pd.to_datetime(games['lastMoveAt'], unit='ms')
@@ -66,38 +68,14 @@ def load_data(filename: str, username: str) -> pd.DataFrame:
     games[['rating', 'ratingDiff', 'opponent_rating', 'opponent_ratingDiff']] = games['players'].apply(ppi)
     games['game_result'] = games.apply(lambda x: parse_game_result(x, username), axis=1)
     games[['clock', 'opponent_clock']] = games.apply(lambda x: pd.Series(parse_clock(x, username)), axis=1)
-    print(f'Prepare data - {datetime.now() - start_time}')
-
     return games
-
 
 def filter_moves_count(games: pd.DataFrame, moves_count: int) -> pd.DataFrame:
     return games[games['moves'].map(lambda x: (len(x.split()) / 2) > moves_count)]
-
-# standard rated blitz 3+2, more 5 moves
-def filter_type(games: pd.DataFrame) -> pd.DataFrame:
-    games = games.loc[(games['rated'] == True) & (games['variant'] == 'standard') & (games['speed'] == 'blitz')]
-    games = games[games['clock'].map(lambda x: ('initial' in x) and (x['initial'] == 180))]
-    games = games[games['clock'].map(lambda x: ('increment' in x) and (x['increment'] == 2))]
-    games = filter_moves_count(games, 5)
-    return games
-
 def filter_date(games: pd.DataFrame, begin: datetime, end: datetime) -> pd.DataFrame:
     return games.loc[(games['createdAt'] > begin) & (games['createdAt'] < end)]
 
-
-def save_plot(games: pd.DataFrame, plot_func: PlotFunc, filenames: List[str]):
-    start_time = datetime.now()
-    figures = plot_func(games)
-    calc_time = datetime.now() - start_time
-    print(f'{filenames} - {calc_time}')
-    for fig, filename in zip(figures, filenames):
-        fig.tight_layout()
-        fig.savefig(filename, dpi=300)
-        plt.close(fig)
-
-
-def plot_time(games: pd.DataFrame, interval: timedelta) -> List[matplotlib.figure.Figure]:
+def calc_time(games: pd.DataFrame, interval: timedelta) -> pd.Series:
     def get_time_from_midnight(dt) -> int:
         return timedelta_get_total_microseconds(dt - dt.replace(hour=0, minute=0, second=0, microsecond=0))
 
@@ -110,18 +88,19 @@ def plot_time(games: pd.DataFrame, interval: timedelta) -> List[matplotlib.figur
     
     games['createdAt_from_midnight_bins'] = pd.cut(games['createdAt_from_midnight'], bins=bins, labels=labels)
     stats = games.groupby('createdAt_from_midnight_bins', observed=False)['id'].count()
-
+    return stats
+def plot_time(stats: pd.Series) -> PltFigure:
     fig, ax = plt.subplots(nrows=1, ncols=1)
     ax.bar(stats.index.tolist(), stats.values)
     ax.set_xlabel('Время суток'); ax.set_ylabel('Кол-во игр')
     ax.set_xticks(ax.get_xticks())
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
-    return [fig]
-   
-def plot_rating(games: pd.DataFrame) -> List[matplotlib.figure.Figure]:
+    return fig
+
+def plot_rating(games: pd.DataFrame) -> PltFigure:
     fig, ax = plt.subplots(nrows=1, ncols=1)
     games.plot(x='createdAt', y='rating', ax=ax, xlabel='Дата', ylabel='Рейтинг', legend=False)
-    return [fig]
+    return fig
 
 def calc_winrate_in_bin(games: pd.DataFrame, min_games_count: int, bin_name: str):
     agg_dict = {
@@ -138,7 +117,7 @@ def calc_winrate_in_bin(games: pd.DataFrame, min_games_count: int, bin_name: str
     stats['drawrate'] = stats['draw_count'] / stats['count']
     return stats
 
-def plot_rating_diff(games: pd.DataFrame, merge_value: int) -> List[matplotlib.figure.Figure]:
+def calc_rating_diff(games: pd.DataFrame, merge_value: int) -> pd.Series:
     c_min_games_count = 20
 
     games = games.copy()
@@ -153,15 +132,21 @@ def plot_rating_diff(games: pd.DataFrame, merge_value: int) -> List[matplotlib.f
     games['rating_delta_bins'] = pd.cut(games['rating_delta'], bins=bins, labels=labels)
 
     stats = calc_winrate_in_bin(games, c_min_games_count, 'rating_delta_bins')
-
+    return stats
+def plot_rating_diff(stats: pd.Series) -> PltFigure:
     fig, ax = plt.subplots(nrows=1, ncols=1)
     ax.plot(stats.index.tolist(), stats['winrate'], label='Winrate')
     ax.plot(stats.index.tolist(), stats['loserate'], label='Loserate')
     ax.set_xlabel('Разница в рейтинге'); ax.set_ylabel('Процент побед / поражений'); plt.legend()
     ax.axhline(y=0.5, color='r', linestyle='--')
-    return [fig]
+    return fig
+def plot_drawrate_by_rating_diff(stats: pd.Series) -> PltFigure:
+    fig, ax = plt.subplots(nrows=1, ncols=1)
+    ax.plot(stats.index.tolist(), stats['drawrate'], label='Drawrate')
+    ax.set_xlabel('Время на игру'); ax.set_ylabel('Процент ничьих'); plt.legend()
+    return fig
 
-def calc_winrate_by_game_time(games: pd.DataFrame, merge_value: int):
+def calc_rates_by_game_type(games: pd.DataFrame, merge_value: int) -> pd.Series:
     c_min_games_count = 10
 
     games['points'] = games.apply(lambda x: parse_game_points(x), axis=1)
@@ -173,31 +158,75 @@ def calc_winrate_by_game_time(games: pd.DataFrame, merge_value: int):
 
     stats = calc_winrate_in_bin(games, c_min_games_count, 'think_time_bins')
     return stats
-
-def plot_winrate_by_game_time(games: pd.DataFrame, merge_value: int) -> List[matplotlib.figure.Figure]:
-    stats = calc_winrate_by_game_time(games, merge_value)
-
-    fig1, ax = plt.subplots(nrows=1, ncols=1)
+def plot_wl_rates_by_game_time(stats: pd.Series) -> PltFigure:
+    fig, ax = plt.subplots(nrows=1, ncols=1)
     ax.plot(stats.index.tolist(), stats['winrate'], label='Winrate')
     ax.plot(stats.index.tolist(), stats['loserate'], label='Loserate')
     ax.set_xlabel('Время на игру'); ax.set_ylabel('Процент побед / поражений'); plt.legend()
     ax.axhline(y=0.5, color='r', linestyle='--')
-
-    fig2, ax = plt.subplots(nrows=1, ncols=1)
+    return fig
+def plot_drawrate_by_game_time(stats: pd.Series) -> PltFigure:
+    fig, ax = plt.subplots(nrows=1, ncols=1)
     ax.plot(stats.index.tolist(), stats['drawrate'], label='Drawrate')
     ax.set_xlabel('Время на игру'); ax.set_ylabel('Процент ничьих'); plt.legend()
+    return fig
 
-    return [fig1, fig2]
+def calc_game_status(games: pd.DataFrame) -> pd.Series:
+    stats = games.groupby('status', observed=False)['id'].count()
+    return stats
+def plot_game_status(stats: pd.Series) -> PltFigure:
+    labels = [f'{title}: {count}' for title, count in zip(stats.index.tolist(), stats.values)]
+    fig, ax = plt.subplots(nrows=1, ncols=1)
+    ax.pie(stats.values, labels=labels)
+    return fig
 
-    
+def process_data(games: pd.DataFrame, calc_func: CalcFunc, plot_funcs: List[Tuple[PlotFunc, OutFunc]]):
+    calc_result = calc_func(games) if (calc_func is not None) else games
+    for plot_func, out_func in plot_funcs:
+        figure = plot_func(calc_result)
+        out_func(figure)
+        plt.close(figure)
+
+def save_to_file(figure: PltFigure, title: str):
+    figure.tight_layout()
+    figure.savefig(f'plots/{title}.png', dpi=300)
+def binded_save(title: str):
+    return functools.partial(save_to_file, title=title)
+def show(figure: PltFigure):
+    figure.show()
+    plt.show()
+
+# standard rated blitz 3+2, more 5 moves
+def filter_games(games: pd.DataFrame) -> pd.DataFrame:
+    games = games.loc[(games['rated'] == True) & (games['variant'] == 'standard') & (games['speed'] == 'blitz')]
+    games = games[games['clock'].map(lambda x: ('initial' in x) and (x['initial'] == 180))]
+    games = games[games['clock'].map(lambda x: ('increment' in x) and (x['increment'] == 2))]
+    games = filter_moves_count(games, 5)
+    return games
+
+
 def main():
-    games = load_data(config.c_filename, config.c_username)
+    games = print_exec_time(load_from_db, 'Load from database')
+    games = filter_games(games)
+    games = print_exec_time(bind(prepare_dataframe, games, config.c_username), 'Prepare dataframe')
     games = filter_date(games, '2020-09-25', '2024-09-30')
 
-    save_plot(games, plot_rating, ['plots/rating.png'])
-    save_plot(games, functools.partial(plot_time, interval=timedelta(hours=1)), ['plots/time.png'])
-    save_plot(games, functools.partial(plot_rating_diff, merge_value=10), ['plots/rating_diff.png'])
-    save_plot(games, functools.partial(plot_winrate_by_game_time, merge_value=10), ['plots/winrate_by_think_time.png', 'plots/drawrate_by_think_time.png'])
+    process_data(games, functools.partial(calc_time, interval=timedelta(hours=1)),
+                 [ (plot_time, binded_save('time')) ])
+    process_data(games, None,
+                 [ (plot_rating, binded_save('rating')) ])
+    process_data(games, functools.partial(calc_rating_diff, merge_value=10),
+                 [
+                     (plot_rating_diff, binded_save('rating_diff')),
+                     (plot_drawrate_by_rating_diff, binded_save('drawrate_by_rating_diff')),
+                 ])
+    process_data(games, functools.partial(calc_rates_by_game_type, merge_value=10),
+                 [
+                     (plot_wl_rates_by_game_time, binded_save('wl_rates_by_think_time')),
+                     (plot_drawrate_by_game_time, binded_save('drawrate_by_think_time'))
+                 ])
+    process_data(games, calc_game_status,
+                 [ (plot_game_status, binded_save('game_status')) ])
 
 if __name__ == '__main__':
     main()
