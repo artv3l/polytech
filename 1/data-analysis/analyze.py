@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Callable, List, Any, Tuple
 import functools
+from pathlib import Path
 
 import configparser
 import matplotlib.axes
@@ -213,18 +214,19 @@ def process_data(games: pd.DataFrame, calc_func: CalcFunc, plot_funcs: List[Tupl
 
 def save_to_file(figure: PltFigure, title: str):
     figure.tight_layout()
-    figure.savefig(f'plots/{title}.png', dpi=300)
+    path = f'plots/{config.c_username}/{config.game_speed}_{config.clock_initial}+{config.clock_increment}'
+    Path(path).mkdir(parents=True, exist_ok=True)
+    figure.savefig(f'{path}/{title}.png', dpi=300)
 def binded_save(title: str):
     return functools.partial(save_to_file, title=title)
 def show(figure: PltFigure):
     figure.show()
     plt.show()
 
-# standard rated blitz 3+2, more 5 moves
 def filter_games(games: pd.DataFrame) -> pd.DataFrame:
-    games = games.loc[(games['rated'] == True) & (games['variant'] == 'standard') & (games['speed'] == 'blitz')]
-    games = games[games['clock'].map(lambda x: ('initial' in x) and (x['initial'] == 180))]
-    games = games[games['clock'].map(lambda x: ('increment' in x) and (x['increment'] == 2))]
+    games = games.loc[games['rated'] & (games['variant'] == 'standard') & (games['speed'] == config.game_speed)]
+    games = games[games['clock'].map(lambda x: ('initial' in x) and (x['initial'] == config.clock_initial))]
+    games = games[games['clock'].map(lambda x: ('increment' in x) and (x['increment'] == config.clock_increment))]
     games = filter_moves_count(games, 5)
     return games
 
@@ -234,6 +236,8 @@ def main():
     games = filter_games(games)
     games = print_exec_time(bind(prepare_dataframe, games, config.c_username), 'Prepare dataframe')
     games = filter_date(games, '2020-09-25', '2024-09-30')
+
+    print(f'Games count: {len(games.index)}')
 
     process_data(games, functools.partial(calc_time, interval=timedelta(hours=1)),
                  [ (plot_time, binded_save('time')) ])
