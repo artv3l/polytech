@@ -9,7 +9,8 @@ import matplotlib.figure
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-
+from pyspark.sql import SparkSession
+ 
 import config
 import dbase
 
@@ -39,12 +40,14 @@ def parse_players_info(row, username):
     return result
 def parse_game_result(row, username):
     (player_color, opponent_color) = ('white', 'black') if row['players']['white']['user']['name'] == username else ('black', 'white')
-    if row['status'] == 'draw':
+    if row['status'] in ['draw', 'stalemate']:
         return 'draw'
     elif row['winner'] == player_color:
         return 'win'
-    else:
+    elif row['winner'] == opponent_color:
         return 'lose'
+    else:
+        return 'draw'
 def parse_game_points(row):
     if row['game_result'] == 'draw': return 0
     elif row['game_result'] == 'win': return 1
@@ -148,13 +151,14 @@ def plot_drawrate_by_rating_diff(stats: pd.Series) -> PltFigure:
 
 def calc_rates_by_game_type(games: pd.DataFrame, merge_value: int) -> pd.Series:
     c_min_games_count = 10
+    initial_time = 180
 
     games['points'] = games.apply(lambda x: parse_game_points(x), axis=1)
     games['think_time'] = games['clock'].apply(lambda x: int((x[0] - x[-1]) / 100))
 
-    bins = [i for i in range(0, 181, merge_value)]
+    bins = [i for i in range(0, initial_time, merge_value)] + [initial_time, initial_time+1]
     labels = bins[1:]
-    games['think_time_bins'] = pd.cut(games['think_time'], bins=bins, labels=labels)
+    games['think_time_bins'] = pd.cut(games['think_time'], bins=bins, labels=labels, right=False)
 
     stats = calc_winrate_in_bin(games, c_min_games_count, 'think_time_bins')
     return stats
@@ -179,6 +183,12 @@ def plot_game_status(stats: pd.Series) -> PltFigure:
     fig, ax = plt.subplots(nrows=1, ncols=1)
     ax.pie(stats.values, labels=labels)
     return fig
+
+def calc_game_result_by_status(games: pd.DataFrame) ->pd.Series:
+    stats = games.groupby(['status', 'game_result'], observed=False)['id'].count()
+    print(stats)
+    return stats
+
 
 def process_data(games: pd.DataFrame, calc_func: CalcFunc, plot_funcs: List[Tuple[PlotFunc, OutFunc]]):
     calc_result = calc_func(games) if (calc_func is not None) else games
@@ -211,6 +221,8 @@ def main():
     games = print_exec_time(bind(prepare_dataframe, games, config.c_username), 'Prepare dataframe')
     games = filter_date(games, '2020-09-25', '2024-09-30')
 
+    calc_game_result_by_status(games)
+
     process_data(games, functools.partial(calc_time, interval=timedelta(hours=1)),
                  [ (plot_time, binded_save('time')) ])
     process_data(games, None,
@@ -220,7 +232,7 @@ def main():
                      (plot_rating_diff, binded_save('rating_diff')),
                      (plot_drawrate_by_rating_diff, binded_save('drawrate_by_rating_diff')),
                  ])
-    process_data(games, functools.partial(calc_rates_by_game_type, merge_value=10),
+    process_data(games, functools.partial(calc_rates_by_game_type, merge_value=5),
                  [
                      (plot_wl_rates_by_game_time, binded_save('wl_rates_by_think_time')),
                      (plot_drawrate_by_game_time, binded_save('drawrate_by_think_time'))
