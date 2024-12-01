@@ -179,15 +179,29 @@ def calc_game_status(games: pd.DataFrame) -> pd.Series:
     stats = games.groupby('status', observed=False)['id'].count()
     return stats
 def plot_game_status(stats: pd.Series) -> PltFigure:
+    stats['draw'] += stats['stalemate']
+    stats = stats[stats.index != 'stalemate']
     labels = [f'{title}: {count}' for title, count in zip(stats.index.tolist(), stats.values)]
     fig, ax = plt.subplots(nrows=1, ncols=1)
     ax.pie(stats.values, labels=labels)
     return fig
 
-def calc_game_result_by_status(games: pd.DataFrame) ->pd.Series:
+def calc_game_result_by_status(games: pd.DataFrame) -> pd.Series:
     stats = games.groupby(['status', 'game_result'], observed=False)['id'].count()
-    print(stats)
     return stats
+def plot_game_result_by_status(stats: pd.Series) -> PltFigure:
+    types = ['mate', 'outoftime', 'resign']
+    stats = stats[stats.index.isin(['mate', 'outoftime', 'resign'], level=0)]
+
+    fig, axs = plt.subplots(nrows=1, ncols=3)
+
+    for t, ax in zip(types, axs):
+        s = stats[t]
+        labels = [f'{title}: {count}' for title, count in zip(s.index.tolist(), s.values)]
+        ax.pie(s.values, labels=labels)
+        ax.title.set_text(t)
+    return fig
+
 
 
 def process_data(games: pd.DataFrame, calc_func: CalcFunc, plot_funcs: List[Tuple[PlotFunc, OutFunc]]):
@@ -221,8 +235,6 @@ def main():
     games = print_exec_time(bind(prepare_dataframe, games, config.c_username), 'Prepare dataframe')
     games = filter_date(games, '2020-09-25', '2024-09-30')
 
-    calc_game_result_by_status(games)
-
     process_data(games, functools.partial(calc_time, interval=timedelta(hours=1)),
                  [ (plot_time, binded_save('time')) ])
     process_data(games, None,
@@ -239,6 +251,8 @@ def main():
                  ])
     process_data(games, calc_game_status,
                  [ (plot_game_status, binded_save('game_status')) ])
+    process_data(games, calc_game_result_by_status,
+                 [ (plot_game_result_by_status, binded_save('game_result_by_status')) ])
 
 if __name__ == '__main__':
     main()
