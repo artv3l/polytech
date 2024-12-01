@@ -151,7 +151,7 @@ def calc_rating_diff(games: pd.DataFrame, merge_value: int) -> pd.Series:
     stats = calc_winrate_in_bin(games, c_min_games_count, 'rating_delta_bins')
     return stats
 
-def calc_rates_by_game_type(games: pd.DataFrame, merge_value: int) -> pd.Series:
+def calc_rates_by_game_time(games: pd.DataFrame, merge_value: int) -> pd.Series:
     c_min_games_count = 10
     initial_time = 180
 
@@ -174,6 +174,7 @@ def plot_game_status(stats: pd.Series) -> PltFigure:
     labels = [f'{title}: {count}' for title, count in zip(stats.index.tolist(), stats.values)]
     fig, ax = plt.subplots(nrows=1, ncols=1)
     ax.pie(stats.values, labels=labels)
+    ax.title.set_text(f'Total games: {sum(stats.values)}')
     return fig
 
 def calc_game_result_by_status(games: pd.DataFrame) -> pd.Series:
@@ -236,16 +237,21 @@ def main():
                  [ (plot_time, binded_save('time')) ])
     process_data(games, None,
                  [ (plot_rating, binded_save('rating')) ])
-    process_data(games, functools.partial(calc_rating_diff, merge_value=10),
+
+    rating_mv = 10
+    process_data(games, functools.partial(calc_rating_diff, merge_value=rating_mv),
                  [
-                     (bind(plot_wl_rates, xlabel='Разница в рейтинге'), binded_save('wl_rates_by_rating_diff')),
-                     (bind(plot_drawrate, xlabel='Разница в рейтинге'), binded_save('drawrate_by_rating_diff')),
+                     (bind(plot_wl_rates, xlabel='Разница в рейтинге'), binded_save(f'wl_rates_by_rating_diff_mv{rating_mv}')),
+                     (bind(plot_drawrate, xlabel='Разница в рейтинге'), binded_save(f'drawrate_by_rating_diff_mv{rating_mv}')),
                  ])
-    process_data(games, functools.partial(calc_rates_by_game_type, merge_value=5),
+
+    game_time_mv = 5 if config.game_speed == 'blitz' else 1
+    process_data(games, functools.partial(calc_rates_by_game_time, merge_value=game_time_mv),
                  [
-                     (bind(plot_wl_rates, xlabel='Время на игру'), binded_save('wl_rates_by_think_time')),
-                     (bind(plot_drawrate, xlabel='Время на игру'), binded_save('drawrate_by_think_time'))
+                     (bind(plot_wl_rates, xlabel='Время на игру'), binded_save(f'wl_rates_by_think_time_mv{game_time_mv}')),
+                     (bind(plot_drawrate, xlabel='Время на игру'), binded_save(f'drawrate_by_think_time_mv{game_time_mv}'))
                  ])
+
     process_data(games, calc_game_status,
                  [ (plot_game_status, binded_save('game_status')) ])
     process_data(games, calc_game_result_by_status,
