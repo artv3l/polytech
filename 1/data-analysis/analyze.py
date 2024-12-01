@@ -121,6 +121,19 @@ def calc_winrate_in_bin(games: pd.DataFrame, min_games_count: int, bin_name: str
     stats['drawrate'] = stats['draw_count'] / stats['count']
     return stats
 
+def plot_wl_rates(stats: pd.Series, xlabel: str) -> PltFigure:
+    fig, ax = plt.subplots(nrows=1, ncols=1)
+    ax.plot(stats.index.tolist(), stats['winrate'], label='Winrate')
+    ax.plot(stats.index.tolist(), stats['loserate'], label='Loserate')
+    ax.set_xlabel(xlabel); ax.set_ylabel('Процент побед / поражений'); plt.legend()
+    ax.axhline(y=0.5, color='r', linestyle='--')
+    return fig
+def plot_drawrate(stats: pd.Series, xlabel: str) -> PltFigure:
+    fig, ax = plt.subplots(nrows=1, ncols=1)
+    ax.plot(stats.index.tolist(), stats['drawrate'], label='Drawrate')
+    ax.set_xlabel(xlabel); ax.set_ylabel('Процент ничьих'); plt.legend()
+    return fig
+
 def calc_rating_diff(games: pd.DataFrame, merge_value: int) -> pd.Series:
     c_min_games_count = 20
 
@@ -137,18 +150,6 @@ def calc_rating_diff(games: pd.DataFrame, merge_value: int) -> pd.Series:
 
     stats = calc_winrate_in_bin(games, c_min_games_count, 'rating_delta_bins')
     return stats
-def plot_rating_diff(stats: pd.Series) -> PltFigure:
-    fig, ax = plt.subplots(nrows=1, ncols=1)
-    ax.plot(stats.index.tolist(), stats['winrate'], label='Winrate')
-    ax.plot(stats.index.tolist(), stats['loserate'], label='Loserate')
-    ax.set_xlabel('Разница в рейтинге'); ax.set_ylabel('Процент побед / поражений'); plt.legend()
-    ax.axhline(y=0.5, color='r', linestyle='--')
-    return fig
-def plot_drawrate_by_rating_diff(stats: pd.Series) -> PltFigure:
-    fig, ax = plt.subplots(nrows=1, ncols=1)
-    ax.plot(stats.index.tolist(), stats['drawrate'], label='Drawrate')
-    ax.set_xlabel('Время на игру'); ax.set_ylabel('Процент ничьих'); plt.legend()
-    return fig
 
 def calc_rates_by_game_type(games: pd.DataFrame, merge_value: int) -> pd.Series:
     c_min_games_count = 10
@@ -163,18 +164,6 @@ def calc_rates_by_game_type(games: pd.DataFrame, merge_value: int) -> pd.Series:
 
     stats = calc_winrate_in_bin(games, c_min_games_count, 'think_time_bins')
     return stats
-def plot_wl_rates_by_game_time(stats: pd.Series) -> PltFigure:
-    fig, ax = plt.subplots(nrows=1, ncols=1)
-    ax.plot(stats.index.tolist(), stats['winrate'], label='Winrate')
-    ax.plot(stats.index.tolist(), stats['loserate'], label='Loserate')
-    ax.set_xlabel('Время на игру'); ax.set_ylabel('Процент побед / поражений'); plt.legend()
-    ax.axhline(y=0.5, color='r', linestyle='--')
-    return fig
-def plot_drawrate_by_game_time(stats: pd.Series) -> PltFigure:
-    fig, ax = plt.subplots(nrows=1, ncols=1)
-    ax.plot(stats.index.tolist(), stats['drawrate'], label='Drawrate')
-    ax.set_xlabel('Время на игру'); ax.set_ylabel('Процент ничьих'); plt.legend()
-    return fig
 
 def calc_game_status(games: pd.DataFrame) -> pd.Series:
     stats = games.groupby('status', observed=False)['id'].count()
@@ -225,6 +214,10 @@ def show(figure: PltFigure):
 
 def filter_games(games: pd.DataFrame) -> pd.DataFrame:
     games = games.loc[games['rated'] & (games['variant'] == 'standard') & (games['speed'] == config.game_speed)]
+
+    # Не очень понятно, почему ratingDiff может не быть. Возможно когда рейтинг слишком сильно отличается
+    games = games[games['players'].map(lambda x: ('ratingDiff' in x['white']) and ('ratingDiff' in x['black']))]
+    
     games = games[games['clock'].map(lambda x: ('initial' in x) and (x['initial'] == config.clock_initial))]
     games = games[games['clock'].map(lambda x: ('increment' in x) and (x['increment'] == config.clock_increment))]
     games = filter_moves_count(games, 5)
@@ -245,13 +238,13 @@ def main():
                  [ (plot_rating, binded_save('rating')) ])
     process_data(games, functools.partial(calc_rating_diff, merge_value=10),
                  [
-                     (plot_rating_diff, binded_save('rating_diff')),
-                     (plot_drawrate_by_rating_diff, binded_save('drawrate_by_rating_diff')),
+                     (bind(plot_wl_rates, xlabel='Разница в рейтинге'), binded_save('wl_rates_by_rating_diff')),
+                     (bind(plot_drawrate, xlabel='Разница в рейтинге'), binded_save('drawrate_by_rating_diff')),
                  ])
     process_data(games, functools.partial(calc_rates_by_game_type, merge_value=5),
                  [
-                     (plot_wl_rates_by_game_time, binded_save('wl_rates_by_think_time')),
-                     (plot_drawrate_by_game_time, binded_save('drawrate_by_think_time'))
+                     (bind(plot_wl_rates, xlabel='Время на игру'), binded_save('wl_rates_by_think_time')),
+                     (bind(plot_drawrate, xlabel='Время на игру'), binded_save('drawrate_by_think_time'))
                  ])
     process_data(games, calc_game_status,
                  [ (plot_game_status, binded_save('game_status')) ])
