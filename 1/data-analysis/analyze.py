@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Callable, List, Any, Tuple
 import functools
+from collections import Counter
 from pathlib import Path
 
 import configparser
@@ -127,10 +128,12 @@ def plot_wl_rates(stats: pd.Series, xlabel: str) -> PltFigure:
     ax.plot(stats.index.tolist(), stats['loserate'], label='Loserate')
     ax.set_xlabel(xlabel); ax.set_ylabel('Процент побед / поражений'); plt.legend()
     ax.axhline(y=0.5, color='r', linestyle='--')
+    #ax.axvline(x=0.0, color='b', linestyle='--')
     return fig
 def plot_drawrate(stats: pd.Series, xlabel: str) -> PltFigure:
     fig, ax = plt.subplots(nrows=1, ncols=1)
     ax.plot(stats.index.tolist(), stats['drawrate'], label='Drawrate')
+    #ax.axvline(x=0.0, color='b', linestyle='--')
     ax.set_xlabel(xlabel); ax.set_ylabel('Процент ничьих'); plt.legend()
     return fig
 
@@ -224,29 +227,49 @@ def filter_games(games: pd.DataFrame) -> pd.DataFrame:
     games = filter_moves_count(games, 5)
     return games
 
+def calc_popular_moves(games: pd.DataFrame) -> pd.Series:
+    def generate_variable_windows(move_list, min_size=2, max_size=6):
+        move_list = move_list.split()
+        windows = []
+        for window_size in range(min_size, max_size + 1):
+            windows.extend([' '.join(move_list[i:i+window_size]) for i in range(len(move_list) - window_size + 1)])
+        return windows
+
+    games['moves_list'] = games['moves'].apply(generate_variable_windows)
+    
+    all_windows = sum(games['moves_list'], [])
+    sequence_counts = Counter(all_windows)
+
+    most_common_sequences = sequence_counts.most_common(10)
+    print(most_common_sequences)
+
 
 def main():
+
     games = print_exec_time(load_from_db, 'Load from database')
     games = filter_games(games)
     games = print_exec_time(bind(prepare_dataframe, games, config.c_username), 'Prepare dataframe')
     games = filter_date(games, '2020-09-25', '2024-09-30')
 
     print(f'Games count: {len(games.index)}')
+    
+    #print_exec_time(bind(calc_popular_moves, games), 'Calc popular moves')
 
-    process_data(games, functools.partial(calc_time, interval=timedelta(hours=1)),
+    process_data(games, bind(calc_time, interval=timedelta(hours=1)),
                  [ (plot_time, binded_save('time')) ])
+
     process_data(games, None,
                  [ (plot_rating, binded_save('rating')) ])
 
     rating_mv = 10
-    process_data(games, functools.partial(calc_rating_diff, merge_value=rating_mv),
+    process_data(games, bind(calc_rating_diff, merge_value=rating_mv),
                  [
                      (bind(plot_wl_rates, xlabel='Разница в рейтинге'), binded_save(f'wl_rates_by_rating_diff_mv{rating_mv}')),
                      (bind(plot_drawrate, xlabel='Разница в рейтинге'), binded_save(f'drawrate_by_rating_diff_mv{rating_mv}')),
                  ])
 
     game_time_mv = 5 if config.game_speed == 'blitz' else 1
-    process_data(games, functools.partial(calc_rates_by_game_time, merge_value=game_time_mv),
+    process_data(games, bind(calc_rates_by_game_time, merge_value=game_time_mv),
                  [
                      (bind(plot_wl_rates, xlabel='Время на игру'), binded_save(f'wl_rates_by_think_time_mv{game_time_mv}')),
                      (bind(plot_drawrate, xlabel='Время на игру'), binded_save(f'drawrate_by_think_time_mv{game_time_mv}'))
