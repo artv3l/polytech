@@ -1,0 +1,15 @@
+<root>
+    <user id="1">
+        <name>John Doe</name>
+        <email>johndoe@example.com</email>
+        <age>30</age>
+    </user>
+    <user id="2">
+        <name>JaneSmith</name>
+        <email>janesmith@example.com</email>
+        <age>28</age>
+    </user>
+    <settings>
+        <theme>dark</theme>
+    </settings>
+</root>
