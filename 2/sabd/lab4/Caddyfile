@@ -1,0 +1,15 @@
+{
+    admin off
+}
+
+:5002 {
+    handle_path /api/* {
+        reverse_proxy :5001 {
+            header_up Test "TestSample"
+        }
+    }
+
+    handle {
+        reverse_proxy :5002
+    }
+}
