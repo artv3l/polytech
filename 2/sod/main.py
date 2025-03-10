@@ -127,8 +127,29 @@ def calc_m(intervals, n, interval_width, false_zero):
 
     return [m1, m2, m3, m4]
 
+def f17_for_5_19(mean_cfi, offset_variance_cfi, n):
+    t_5_19 = 2.093
+    temp = t_5_19 * (offset_variance_cfi / math.sqrt(n-1))
+    cfi_min = mean_cfi - temp
+    cfi_max = mean_cfi + temp
+    return cfi_min, cfi_max
+
+def calc_cfi_for_variance(n, offset_variance_cfi):
+    hi1 = 8.567; hi2 = 33.7
+    cfi_min = n * offset_variance_cfi**2 / hi2
+    cfi_max = n * offset_variance_cfi**2 / hi1
+    return cfi_min, cfi_max
+
+def f18(n):
+    return math.sqrt((6 * (n - 1)) / ((n + 1) * (n + 3)))
+
+def f19(n):
+    a = 24 * n * (n - 2) * (n - 3)
+    b = (n - 1)**2 * (n + 3) * (n + 5)
+    return math.sqrt(a / b)
+
 def main(data):
-    sorted_data = data; sorted_data.sort()
+    sorted_data = data.copy(); sorted_data.sort()
     n = len(data)
 
     mean = statistics.mean(data)
@@ -138,7 +159,7 @@ def main(data):
     print(f'2/3. Смещенная оценка дисперсии = {offset_variance}')
 
     non_offset_variance = f4(offset_variance, n)
-    print(f'4. Не смещенная оценка дисперсии = {non_offset_variance}')
+    print(f'4. Несмещенная оценка дисперсии = {non_offset_variance}')
 
     median = f5(sorted_data)
     print(f'5. Медиана = {median}')
@@ -189,7 +210,39 @@ def main(data):
     excess = (m_list[4-1] / s**4) - 3
     print(f'Эксцесс = {excess}')
 
+    print('Доверительные интервалы')
+    n_cfi = 20 # cfi - Confidence interval
+    data_cfi = data[:n_cfi]
+    
+    mean_cfi = statistics.mean(data_cfi)
+    print(f'  Мат.ожидание (для 20 элементов) = {mean_cfi}')
+    
+    offset_variance_cfi_2 = f2_3(data_cfi, mean_cfi)
+    offset_variance_cfi = offset_variance_cfi_2**0.5
+    print(f'  Смещенная оценка дисперсии = {offset_variance_cfi_2}')
 
+    non_offset_variance_cfi = f4(offset_variance_cfi_2, n_cfi)
+    print(f'  Несмещенная оценка дисперсии s^2 = {non_offset_variance_cfi}')
+    
+    non_offset_variance_cfi_sqrt = non_offset_variance_cfi**0.5
+    print(f'  Несмещенная оценка дисперсии s = {non_offset_variance_cfi_sqrt}')
+
+    q = 5
+    t_5_19 = 2.093
+    print(f'  n-1 = {n_cfi-1} ; q = {q} ; t_5_19 = {t_5_19}')
+
+    print('  Для математического ожидания')
+    cfi_min, cfi_max = f17_for_5_19(mean_cfi, offset_variance_cfi, n_cfi)
+    print(f'    cfi_min = {cfi_min} ; cfi_max = {cfi_max}')
+    
+    print('  Для дисперсии')
+    cfi_min, cfi_max = calc_cfi_for_variance(n_cfi, offset_variance_cfi)
+    print(f'    cfi_min^2 = {cfi_min} ; cfi_max^2 = {cfi_max}')
+    print(f'    cfi_min = {cfi_min**0.5} ; cfi_max = {cfi_max**0.5}')
+
+    sigma_sk = f18(n)
+    sigma_ek = f19(n)
+    print(f'sigma_sk = {sigma_sk} ; sigma_ek = {sigma_ek}')
 
 if __name__ == "__main__":
     main(data_collection.example)
