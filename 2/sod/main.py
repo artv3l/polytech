@@ -148,7 +148,7 @@ def f19(n):
     b = (n - 1)**2 * (n + 3) * (n + 5)
     return math.sqrt(a / b)
 
-def main(data):
+def main(data, is_show_plots):
     sorted_data = data.copy(); sorted_data.sort()
     n = len(data)
 
@@ -176,7 +176,8 @@ def main(data):
     print('Таблица 3:')
     print_intervals(intervals)
 
-    #show_plots(intervals, interval_width)
+    if is_show_plots:
+        show_plots(intervals, interval_width)
 
     mean_intervals = f8(intervals, n)
     print(f'8. Среднее арифметическое по интервалам = {mean_intervals}')
@@ -245,4 +246,4 @@ def main(data):
     print(f'sigma_sk = {sigma_sk} ; sigma_ek = {sigma_ek}')
 
 if __name__ == "__main__":
-    main(data_collection.example)
+    main(data_collection.var3, True)
