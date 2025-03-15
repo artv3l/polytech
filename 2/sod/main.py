@@ -1,6 +1,7 @@
 import statistics
 import math
 import matplotlib.pyplot as plt
+import scipy
 
 import data as data_collection
 
@@ -35,9 +36,9 @@ def make_intervals(sorted_data, l, interval_width):
 
     begin = min(sorted_data)
     for i in range(l):
-        border = (begin, begin + interval_width)
+        border = [begin, begin + interval_width]
         mid = begin + (border[1] - border[0]) / 2
-        result.append([[], border, mid, 0.0, 0.0, 0.0])
+        result.append([[], border, mid, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         begin += interval_width
 
     for val in sorted_data:
@@ -148,6 +149,68 @@ def f19(n):
     b = (n - 1)**2 * (n + 3) * (n + 5)
     return math.sqrt(a / b)
 
+def calc_table7(intervals, variance, mean, n):
+    npi_min = 5
+    s = variance**0.5
+
+    npi_temp = 0.0
+    v_temp = 0
+
+    def cdf(x):
+        return scipy.stats.norm.cdf(x) - 0.5
+
+    for i in range(len(intervals)):
+        interval = intervals[i]
+
+        borders = interval[1]
+        if i == 0:
+            borders[0] = -math.inf
+        elif i == len(intervals) - 1:
+            borders[1] = math.inf
+
+        sigma = (borders[1] - mean) / s
+
+        a = cdf((borders[1] - mean) / s)
+        b = cdf((borders[0] - mean) / s)
+        pi = a - b
+
+        npi = npi_temp + n * pi
+        v = v_temp + interval[3]
+        if npi < npi_min and i != len(intervals) - 1:
+            npi_temp = npi
+            v_temp = v
+            npi = 0.0
+            v = 0
+        else:
+            npi_temp = 0.0
+            v_temp = 0
+
+        interval[6] = sigma
+        interval[7] = a
+        interval[8] = pi
+        interval[9] = npi
+        interval[10] = v
+
+    i = -2
+    while intervals[-1][9] < npi_min:
+        for j in range(9, 11):
+            intervals[-1][j] += intervals[i][j]
+            intervals[i][j] = 0.0
+        i -= 1
+
+    for interval in intervals:
+        interval[11] = interval[10] - interval[9]
+        interval[12] = interval[11]**2 / interval[9] if interval[10] != 0 else 0
+
+def print_table7(intervals):
+    num = 1
+    kv_sum = 0.0
+    for interval in intervals:
+        print(f'  {num:2} | {interval[1][0]:8.2f} : {interval[1][1]:8.2f} | {interval[6]:8.4f} | {interval[7]:8.4f} | {interval[8]:8.4f} | {interval[9]:8.4f} | {interval[10]:4} | {interval[11]:8.4f} | {interval[12]:8.4f}')
+        num += 1
+        kv_sum += interval[12]
+    print(f'  sum = {kv_sum}')
+
 def main(data, is_show_plots):
     sorted_data = data.copy(); sorted_data.sort()
     n = len(data)
@@ -171,7 +234,9 @@ def main(data, is_show_plots):
     interval_width = f6_7(width_of_distribution, l)
     print(f'6. Ширина интервала = {interval_width}')
 
-    # [0 - Элементы из исходной выборки, 1 - Границы[min, max], 2 - Середина интервала, 3 - Частота, 4 - Частотность, 5 - Отностительные серединаы интервалов]
+    # [ 0 - Элементы из исходной выборки, 1 - Границы[min, max],
+    # 2 - Середина интервала, 3 - Частота, 4 - Частотность,
+    # 5 - Отностительные серединаы интервалов, 6 - В доялх сигма ]
     intervals = make_intervals(sorted_data, l, interval_width)
     print('Таблица 3:')
     print_intervals(intervals)
@@ -245,5 +310,26 @@ def main(data, is_show_plots):
     sigma_ek = f19(n)
     print(f'sigma_sk = {sigma_sk} ; sigma_ek = {sigma_ek}')
 
+    print('Критерий Хи-квадрат')
+    calc_table7(intervals, s2, mean_intervals, n)
+    print(f'  {s2**0.5}, {mean_intervals}, {n}')
+    print_table7(intervals)
+
+    print('Критерий знаков')
+    znaks = []
+    for i in range(21):
+        znaks.append(data[i] - data[n - 20 - 1 + i])
+    plus_count = len([x for x in znaks if x > 0])
+    print(f'  + {plus_count} | - {20 - plus_count}')
+
+    print('Критерий Вилкоксона')
+    d = [[i, 'x'] for i in data[:20]] + [[i, 'y'] for i in data[n-20:]]
+    d.sort(key=lambda x: x[0])
+    u = 0
+    for i in range(len(d)):
+        if d[i][1] == 'x':
+            u += len([x for x in d[:i] if x[1] == 'y'])
+    print(f'  u = {u}')
+    
 if __name__ == "__main__":
-    main(data_collection.var3, True)
+    main(data_collection.var3, is_show_plots=False)
