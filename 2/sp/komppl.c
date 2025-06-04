@@ -1812,7 +1812,16 @@ int SVI2()
 {
     FORM();
 
-    // TODO
+    // TODO: OEN2() - else if (SYM[i].TYPE == 'C')
+
+    if (!strcmp(FORMT[0], "SUBSTR"))
+    {
+        int a = 0;
+    }
+    else // !!
+    {
+        int a = 0;
+    }
 
     return 0;
 }
@@ -1827,7 +1836,7 @@ int OPS2()
 {
     FORM();
 
-    // TODO
+    // TODO: use FORMT[0], OPA2()
 
     return 0;
 }
