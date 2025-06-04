@@ -924,12 +924,20 @@ FORM1:
         STROKA[i] == '(' || STROKA[i] == ')' ||
         STROKA[i] == ';' || STROKA[i] == '+' ||
         STROKA[i] == '-' || STROKA[i] == '=' ||
-        STROKA[i] == '*')
+        STROKA[i] == '*' || STROKA[i] == ',')
     {
       FORMT[IFORMT][i - j] = '\x0';
       IFORMT++;
       j = i + 1;
       goto FORM1;
+    }
+    else if (STROKA[i] == '!' && STROKA[i+1] == '!')
+    {
+        ++i;
+        FORMT[IFORMT][i - j] = '\x0';
+        IFORMT++;
+        j = i + 1;
+        goto FORM1;
     }
     else
       FORMT[IFORMT][i - j] = STROKA[i];
@@ -1802,6 +1810,10 @@ int SVI1()
 
 int SVI2()
 {
+    FORM();
+
+    // TODO
+
     return 0;
 }
 
@@ -1813,6 +1825,10 @@ int OPS1()
 
 int OPS2()
 {
+    FORM();
+
+    // TODO
+
     return 0;
 }
 
