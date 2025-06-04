@@ -1078,13 +1078,24 @@ int ODC1()
 
   if (!strcmp(FORMT[2], "BIN") && /* если идентификатор оп- */
       !strcmp(FORMT[3], "FIXED")  /* ределен как bin fixed, */
-      // TODO
       ) 
   {
     SYM[ISYM].TYPE = 'B'; /* то устанавливаем тип   */
                           /* идентификатора = 'B' и */
     goto ODC11;           /* идем на продолжение об-*/
                           /* работки, а             */
+  }
+  else if (!strcmp(FORMT[2], "BIT"))
+  {
+      SYM[ISYM].TYPE = 'C';
+      strcpy(SYM[ISYM].RAZR, FORMT[3]);
+      
+      if (!strcmp(FORMT[4], "INIT"))
+          strcpy(SYM[ISYM++].INIT, FORMT[5]);
+      else
+          strcpy(SYM[ISYM++].INIT, "BL2");
+      goto ODC12;
+
   }
   else /* иначе                  */
   {
@@ -1102,6 +1113,7 @@ ODC11:                                  /* если идентификатор  
   else                                  /* иначе                  */
     strcpy(SYM[ISYM++].INIT, "0B");     /* инициализируем иденти- */
                                         /* фикатор нулем          */
+ODC12:
 
   return 0; /* успешное завешение     */
             /* программы              */
@@ -1545,6 +1557,25 @@ int OEN2()
         ZKARD(); /* запомнить операцию     */
                  /*    Ассемблера          */
       }
+      else if (SYM[i].TYPE == 'C')
+      {
+          strcpy(ASS_CARD._BUFCARD.METKA, SYM[i].NAME);
+          ASS_CARD._BUFCARD.METKA[strlen(ASS_CARD._BUFCARD.METKA)] = ' ';
+
+          memcpy(ASS_CARD._BUFCARD.OPERAC, "DC", 2);
+
+          if (!strcmp(SYM[i].INIT, "BL2"))
+              strcpy(ASS_CARD._BUFCARD.OPERAND, "BL2");
+          else
+          {
+              strcpy(ASS_CARD._BUFCARD.OPERAND, "BL1");
+              strcpy(ASS_CARD._BUFCARD.OPERAND + strlen(ASS_CARD._BUFCARD.OPERAND), SYM[i].INIT);
+          }
+
+          memcpy(ASS_CARD._BUFCARD.COMM, "Определение переменной", 22);
+
+          ZKARD();
+      }
     }
   }
   /* далее идет блок декла- */
@@ -1763,6 +1794,29 @@ int ZNK2()
   return 0;
 }
 
+
+int SVI1()
+{
+    return 0;
+}
+
+int SVI2()
+{
+    return 0;
+}
+
+
+int OPS1()
+{
+    return 0;
+}
+
+int OPS2()
+{
+    return 0;
+}
+
+
 /*..........................................................................*/
 
 /*  п р о г р а м м а     */
@@ -1798,7 +1852,10 @@ int gen_COD() /*интерпретации строк сте-*/
        {/*   13  */ PRO1, PRO2}, /*фрагмента исх.текста.   */
        {/*   14  */ RZR1, RZR2},
        {/*   15  */ TEL1, TEL2},
-       {/*   16  */ ZNK1, ZNK2}};
+       {/*   16  */ ZNK1, ZNK2},
+       {/*   17  */ SVI1, SVI2},
+       {/*   18  */ OPS1, OPS2},
+  };
 
   for (I2 = 0; I2 < L; I2++)              /* организация первого    */
     if ((NOSH = FUN[                      /* прохода семантического */
