@@ -117,6 +117,20 @@ struct
   int CEL3;
 } CEL[NCEL];
 
+
+
+int str_to_int(const char* str)
+{
+    int result = 0;
+    while (*str) {
+        result = result * 10 + (*str - '0'); // преобразуем символ в цифру
+        str++;
+    }
+    return result;
+}
+
+
+
 /*
 ***** Т а б л и ц а, синтаксических правил, записанных в форме распознавания,
 ***** сгруппированных в "кусты" и представленных в виде двухнапрвленного
@@ -1567,10 +1581,22 @@ int OEN2()
       }
       else if (SYM[i].TYPE == 'C')
       {
+          if (!strcmp(SYM[i].INIT, "BL2"))
+          {
+              strcpy(ASS_CARD._BUFCARD.OPERAC, "DS");
+              strcpy(ASS_CARD._BUFCARD.OPERAND, " 0H");
+              strcpy(ASS_CARD._BUFCARD.COMM, " Выравнивание адреса");
+
+              ZKARD();
+          }
+
           strcpy(ASS_CARD._BUFCARD.METKA, SYM[i].NAME);
           ASS_CARD._BUFCARD.METKA[strlen(ASS_CARD._BUFCARD.METKA)] = ' ';
 
-          memcpy(ASS_CARD._BUFCARD.OPERAC, "DC", 2);
+          if (!strcmp(SYM[i].INIT, "BL2"))
+              memcpy(ASS_CARD._BUFCARD.OPERAC, "DS", 2);
+          else
+              memcpy(ASS_CARD._BUFCARD.OPERAC, "DC", 2);
 
           if (!strcmp(SYM[i].INIT, "BL2"))
               strcpy(ASS_CARD._BUFCARD.OPERAND, "BL2");
@@ -1593,19 +1619,37 @@ int OEN2()
   /* рабочий регистры общего*/
   /* назначения             */
 
-  memcpy(ASS_CARD._BUFCARD.METKA, "RBASE", 5); /* формирование EQU-псев- */
-  memcpy(ASS_CARD._BUFCARD.OPERAC, "EQU", 3);  /* дооперации определения */
-  memcpy(ASS_CARD._BUFCARD.OPERAND, "15", 2);  /* номера базового регист-*/
-                                               /* ра общего назначения   */
-                                               /*           и            */
-  ZKARD();                                     /* запоминание ее         */
+  strcpy(ASS_CARD._BUFCARD.METKA, "@RBASE");
+  ASS_CARD._BUFCARD.METKA[strlen(ASS_CARD._BUFCARD.METKA)] = ' ';
+  memcpy(ASS_CARD._BUFCARD.OPERAC, "EQU", 3);
+  strcpy(ASS_CARD._BUFCARD.OPERAND, "5");
+  memcpy(ASS_CARD._BUFCARD.COMM, "Базовый регистр", 15);
 
-  memcpy(ASS_CARD._BUFCARD.METKA, "RRAB", 4); /* формирование EQU-псев- */
-  memcpy(ASS_CARD._BUFCARD.OPERAC, "EQU", 3); /* дооперации определения */
-  memcpy(ASS_CARD._BUFCARD.OPERAND, "5", 1);  /* номера базового регист-*/
-                                              /* ра общего назначения   */
-                                              /*            и           */
-  ZKARD();                                    /* запоминание ее         */
+  ZKARD();
+
+  strcpy(ASS_CARD._BUFCARD.METKA, "@RRAB1");
+  ASS_CARD._BUFCARD.METKA[strlen(ASS_CARD._BUFCARD.METKA)] = ' ';
+  memcpy(ASS_CARD._BUFCARD.OPERAC, "EQU", 3);
+  strcpy(ASS_CARD._BUFCARD.OPERAND, "3");
+  memcpy(ASS_CARD._BUFCARD.COMM, "Промежуточный рез", 17);
+
+  ZKARD();
+
+  strcpy(ASS_CARD._BUFCARD.METKA, "@RRAB2");
+  ASS_CARD._BUFCARD.METKA[strlen(ASS_CARD._BUFCARD.METKA)] = ' ';
+  memcpy(ASS_CARD._BUFCARD.OPERAC, "EQU", 3);
+  strcpy(ASS_CARD._BUFCARD.OPERAND, "4");
+  memcpy(ASS_CARD._BUFCARD.COMM, "Второй вспомогательный регистр", 30);
+
+  ZKARD();
+
+  strcpy(ASS_CARD._BUFCARD.METKA, "@RVIX");
+  ASS_CARD._BUFCARD.METKA[strlen(ASS_CARD._BUFCARD.METKA)] = ' ';
+  memcpy(ASS_CARD._BUFCARD.OPERAC, "EQU", 3);
+  strcpy(ASS_CARD._BUFCARD.OPERAND, "14");
+  memcpy(ASS_CARD._BUFCARD.COMM, "Регистр возврата", 16);
+
+  ZKARD();
 
   memcpy(ASS_CARD._BUFCARD.OPERAC, "END", 3); /* формирование кода ас-  */
                                               /* семблеровской псевдо-  */
@@ -1816,11 +1860,95 @@ int SVI2()
 
     if (!strcmp(FORMT[0], "SUBSTR"))
     {
-        int a = 0;
+        memcpy(ASS_CARD._BUFCARD.OPERAC, "LH", 2);
+        strcpy(ASS_CARD._BUFCARD.OPERAND, "@RRAB1,");
+        strcat(ASS_CARD._BUFCARD.OPERAND, FORMT[1]);
+        memcpy(ASS_CARD._BUFCARD.COMM, "LH", 3);
+
+        ZKARD();
+
+        memcpy(ASS_CARD._BUFCARD.OPERAC, "SLL", 3);
+        strcpy(ASS_CARD._BUFCARD.OPERAND, "@RRAB1,");
+        sprintf(ASS_CARD._BUFCARD.OPERAND + 7, "%i", 16 + str_to_int(FORMT[2]) - 1);
+        memcpy(ASS_CARD._BUFCARD.COMM, "Сдвиг со стиранием", 18);
+
+        ZKARD();
+
+        memcpy(ASS_CARD._BUFCARD.OPERAC, "SRL", 3);
+        strcpy(ASS_CARD._BUFCARD.OPERAND, "@RRAB1,");
+        sprintf(ASS_CARD._BUFCARD.OPERAND + 7, "%i", 32 - str_to_int(FORMT[3]));
+        memcpy(ASS_CARD._BUFCARD.COMM, "Выделение подстроки", 19);
+
+        ZKARD();
+
+        memcpy(ASS_CARD._BUFCARD.OPERAC, "SLL", 3);
+        strcpy(ASS_CARD._BUFCARD.OPERAND, "@RRAB1,");
+        sprintf(ASS_CARD._BUFCARD.OPERAND + 7, "%i", 16 - str_to_int(FORMT[3]));
+        memcpy(ASS_CARD._BUFCARD.COMM, "Сдвиг подстроки длиной 3 бита", 29);
+
+        ZKARD();
     }
     else // !!
     {
-        int a = 0;
+        int i = 0;
+        int arg1 = 0;
+        for (i = 0; i < ISYM; i++)              /* если фиксируем повтор- */
+        {                                       /* повторное объявление   */
+            if (!strcmp(SYM[i].NAME, FORMT[0]) && /* второго терма оператора*/
+                strlen(SYM[i].NAME) ==            /* DCL, то                */
+                strlen(FORMT[0]))
+                arg1 = i;
+            /* завершение программы   */
+         /* по ошибке              */
+        }
+
+        int arg2 = 0;
+        for (i = 0; i < ISYM; i++)              /* если фиксируем повтор- */
+        {                                       /* повторное объявление   */
+            if (!strcmp(SYM[i].NAME, FORMT[1]) && /* второго терма оператора*/
+                strlen(SYM[i].NAME) ==            /* DCL, то                */
+                strlen(FORMT[1]))
+                arg2 = i;
+            /* завершение программы   */
+         /* по ошибке              */
+        }
+
+        memcpy(ASS_CARD._BUFCARD.OPERAC, "IC", 2);
+
+        strcpy(ASS_CARD._BUFCARD.OPERAND, "@RRAB1,");
+        strcat(ASS_CARD._BUFCARD.OPERAND, FORMT[0]);
+        memcpy(ASS_CARD._BUFCARD.COMM, "B -> @RRAB1", 11);
+
+        ZKARD();
+
+        memcpy(ASS_CARD._BUFCARD.OPERAC, "SLL", 3);
+        strcpy(ASS_CARD._BUFCARD.OPERAND, "@RRAB1,");
+        strcat(ASS_CARD._BUFCARD.OPERAND, SYM[arg1].RAZR);
+        memcpy(ASS_CARD._BUFCARD.COMM, "@RRAB1 = @RRAB << 3", 19);
+
+        ZKARD();
+
+        memcpy(ASS_CARD._BUFCARD.OPERAC, "IC", 2);
+        strcpy(ASS_CARD._BUFCARD.OPERAND, "@RRAB2,");
+        strcat(ASS_CARD._BUFCARD.OPERAND, FORMT[1]);
+        memcpy(ASS_CARD._BUFCARD.COMM, "A -> @RRAB2", 11);
+
+        ZKARD();
+
+        memcpy(ASS_CARD._BUFCARD.OPERAC, "OR", 2);
+        strcpy(ASS_CARD._BUFCARD.OPERAND, "@RRAB1,@RRAB2");
+        memcpy(ASS_CARD._BUFCARD.COMM, "@RRAB1 = @RRAB1 | @RRAB2", 24);
+
+        ZKARD();
+
+        memcpy(ASS_CARD._BUFCARD.OPERAC, "SLL", 3);
+        strcpy(ASS_CARD._BUFCARD.OPERAND, "@RRAB1,");
+        char ch_sum_razr = ('0' + (str_to_int(SYM[arg1].RAZR) + str_to_int(SYM[arg2].RAZR)));
+        char temp[2] = {ch_sum_razr, '\0'};
+        strcat(ASS_CARD._BUFCARD.OPERAND, temp);
+        memcpy(ASS_CARD._BUFCARD.COMM, "Сдвиг в правые 16 разрядов @RRAB1", 33);
+
+        ZKARD();
     }
 
     return 0;
@@ -1836,8 +1964,13 @@ int OPS2()
 {
     FORM();
 
-    // TODO: use FORMT[0], OPA2()
+    memcpy(ASS_CARD._BUFCARD.OPERAC, "STH", 3);
+    strcpy(ASS_CARD._BUFCARD.OPERAND, "@RRAB1,");
+    strcat(ASS_CARD._BUFCARD.OPERAND, FORMT[0]);
+    memcpy(ASS_CARD._BUFCARD.COMM, "Запись подстроки", 20);
 
+    ZKARD();
+    
     return 0;
 }
 
