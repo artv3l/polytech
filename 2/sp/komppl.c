@@ -1943,7 +1943,7 @@ int SVI2()
 
         memcpy(ASS_CARD._BUFCARD.OPERAC, "SLL", 3);
         strcpy(ASS_CARD._BUFCARD.OPERAND, "@RRAB1,");
-        char ch_sum_razr = ('0' + (str_to_int(SYM[arg1].RAZR) + str_to_int(SYM[arg2].RAZR)));
+        char ch_sum_razr = ('0' + 8 - (str_to_int(SYM[arg1].RAZR)));
         char temp[2] = {ch_sum_razr, '\0'};
         strcat(ASS_CARD._BUFCARD.OPERAND, temp);
         memcpy(ASS_CARD._BUFCARD.COMM, "Сдвиг в правые 16 разрядов @RRAB1", 33);
