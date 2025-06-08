@@ -647,6 +647,8 @@ void compress_ISXTXT() /* Программа уплотнения   */
              ISXTXT[I1][I2] == '=' ||
              ISXTXT[I1][I2] == '(' ||
              ISXTXT[I1][I2] == ')' ||
+             ISXTXT[I1][I2] == ',' ||
+             ISXTXT[I1][I2] == '!' ||
              ISXTXT[I1][I2] == '*') &&
             PREDSYM == ' ')
         {
@@ -655,8 +657,13 @@ void compress_ISXTXT() /* Программа уплотнения   */
         }
 
         if (ISXTXT[I1][I2] == ' ' &&
-            (PREDSYM == '+' || PREDSYM == '-' ||
-             PREDSYM == '=' || PREDSYM == '*'))
+            (PREDSYM == '+' ||
+             PREDSYM == '-' ||
+             PREDSYM == '=' ||
+             PREDSYM == ',' ||
+             PREDSYM == '!' ||
+             PREDSYM == '\'' ||
+             PREDSYM == '*'))
         {
           goto L2;
         }
