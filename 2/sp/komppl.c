@@ -1944,7 +1944,7 @@ int SVI2()
 
         memcpy(ASS_CARD._BUFCARD.OPERAC, "OR", 2);
         strcpy(ASS_CARD._BUFCARD.OPERAND, "@RRAB1,@RRAB2");
-        memcpy(ASS_CARD._BUFCARD.COMM, "@RRAB1 = @RRAB1 | @RRAB2", 24);
+        memcpy(ASS_CARD._BUFCARD.COMM, "   ", 3);
 
         ZKARD();
 
