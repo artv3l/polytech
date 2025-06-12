@@ -506,7 +506,13 @@ void STXT(int ARG) /*подпр.формир.TXT-карты  */
   TXT.STR_TXT.ADOP[1] = *(PTR + 1); /*двоичного целого        */
   TXT.STR_TXT.ADOP[0] = '\x00';     /*в соглашениях ЕС ЭВМ    */
 
-  if (ARG == 2) /*формирование поля OPER  */
+  if (ARG == 1) /*формирование DC  */
+  {
+      memset(TXT.STR_TXT.OPER, 0x40, 4);
+      memcpy(TXT.STR_TXT.OPER, RX.BUF_OP_RX, 1); /* для RX-формата         */
+      TXT.STR_TXT.DLNOP[1] = 1;
+  }
+  if (ARG == 2) /*формирование поля OPER или DS */
   {
     memset(TXT.STR_TXT.OPER, 64, 4);
     memcpy(TXT.STR_TXT.OPER, RR.BUF_OP_RR, 2); /* для RR-формата         */
@@ -521,7 +527,6 @@ void STXT(int ARG) /*подпр.формир.TXT-карты  */
   {
       memcpy(TXT.STR_TXT.OPER, RS.BUF_OP_RS, 4); /* для RX-формата         */
       TXT.STR_TXT.DLNOP[1] = 4;
-
       ARG = 4;
   }
   memcpy(TXT.STR_TXT.POLE9, ESD.STR_ESD.POLE11, 8); /*формиров.идентифик.поля */
@@ -537,6 +542,8 @@ int SDC() /*подпр.обр.пс.опер.DC    */
   char *RAB; /*рабочая переменная      */
 
   char* operand = TEK_ISX_KARTA.STRUCT_BUFCARD.OPERAND;
+
+  int len = 0;
 
   RX.OP_RX.OP = 0;                                  /*занулим два старших     */
   RX.OP_RX.R1X2 = 0;                                /*байта RX.OP_RX          */
@@ -555,6 +562,7 @@ int SDC() /*подпр.обр.пс.опер.DC    */
     RX.OP_RX.B2D2 = atoi(RAB);    /*перевод ASCII-> int     */
     RAB = (char *)&RX.OP_RX.B2D2; /*приведение к соглашениям*/
     swab(RAB, RAB, 2);            /* ЕС ЭВМ                 */
+    len = 4;
   }
   else if (strncmp(operand, "BL", 2) == 0)
   {
@@ -568,7 +576,7 @@ int SDC() /*подпр.обр.пс.опер.DC    */
               result |= 1;
       }
 
-      int len = operand[2] - '0';
+      len = operand[2] - '0';
       result <<= (len * 8) - strlen(data_str);
 
       RX.OP_RX.OP = result;
@@ -576,7 +584,7 @@ int SDC() /*подпр.обр.пс.опер.DC    */
   else          /*иначе                   */
     return (1); /*сообщение об ошибке     */
 
-  STXT(4); /*формирование TXT-карты  */
+  STXT(len); /*формирование TXT-карты  */
 
   return (0); /*успешн.завершение подпр.*/
 }
@@ -584,22 +592,27 @@ int SDC() /*подпр.обр.пс.опер.DC    */
 int SDS() /*подпр.обр.пс.опер.DS    */
 {
   char* operand = TEK_ISX_KARTA.STRUCT_BUFCARD.OPERAND;
+  int len = 0;
 
   RX.OP_RX.OP = 0;                                   /*занулим два старших     */
   RX.OP_RX.R1X2 = 0;                                 /*байта RX.OP_RX          */
   if (                                               /* если операнд начинается*/
       operand[0] == 'F'                              /* с комбинации F'        */
       )                                              /* то:                    */
+  {
     RX.OP_RX.B2D2 = 0;                               /*занулим RX.OP_RX.B2D2   */
+    len = 4;
+  }
   else if (strncmp(operand, "BL", 2) == 0)
   {
-      RX.OP_RX.B2D2 = 0;
+      RR.OP_RR.OP = 0;
+      RR.OP_RR.R1R2 = 0;
+      len = operand[2] - '0';
   }
-
   else                                               /*иначе                   */
     return (1);                                      /*сообщение об ошибке     */
 
-  STXT(4); /*формирование TXT-карты  */
+  STXT(len); /*формирование TXT-карты  */
 
   return (0); /*успешно завершить подпр.*/
 }
