@@ -9,4 +9,10 @@ project "task1"
     cppdialect "C++17"
 
     files { "komppl.c" }
-    
+
+project "task2"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++17"
+
+    files { "kompassr.c" }

@@ -1590,9 +1590,9 @@ int OEN2()
       {
           if (!strcmp(SYM[i].INIT, "BL2"))
           {
-              strcpy(ASS_CARD._BUFCARD.OPERAC, "DS");
-              strcpy(ASS_CARD._BUFCARD.OPERAND, " 0H");
-              strcpy(ASS_CARD._BUFCARD.COMM, " Выравнивание адреса");
+              memcpy(ASS_CARD._BUFCARD.OPERAC, "DS", 2);
+              memcpy(ASS_CARD._BUFCARD.OPERAND, "0H", 2);
+              memcpy(ASS_CARD._BUFCARD.COMM, "Выравнивание адреса", 19);
 
               ZKARD();
           }
@@ -1772,14 +1772,14 @@ int OPR2()
 
   memcpy(ASS_CARD._BUFCARD.OPERAC, "BALR", 4); /* формируем BALR-операцию*/
   memcpy(ASS_CARD._BUFCARD.OPERAND,            /* Ассемблера             */
-         "RBASE,0", 7);
+         "@RBASE,0", 8);
   memcpy(ASS_CARD._BUFCARD.COMM,
          "Загрузить регистр базы", 22);
   ZKARD(); /* и запоминаем ее        */
 
   memcpy(ASS_CARD._BUFCARD.OPERAC, "USING", 5); /* формируем USING-псевдо-*/
   memcpy(ASS_CARD._BUFCARD.OPERAND,             /* операцию Ассемблера    */
-         "*,RBASE", 7);
+         "*,@RBASE", 8);
   memcpy(ASS_CARD._BUFCARD.COMM,
          "Назначить регистр базой", 23);
   ZKARD(); /* и запоминаем ее        */
