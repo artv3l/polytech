@@ -153,7 +153,7 @@ struct TMOP /*структ.стр.табл.маш.опер*/
         {{'S', 'L', 'L', ' ', ' '}, '\x89', 4, FRS},
         {{'O', 'R', ' ', ' ', ' '}, '\x16', 2, FRR},
         {{'S', 'T', 'H', ' ', ' '}, '\x40', 4, FRX},
-        {{'L', 'H', ' ', ' ', ' '}, '\x48', 4, FRX}, // ??? RX or RS
+        {{'L', 'H', ' ', ' ', ' '}, '\x48', 4, FRX},
         {{'S', 'R', 'L', ' ', ' '}, '\x88', 4, FRS},
 };
 
@@ -317,21 +317,28 @@ int FDC() /*подпр.обр.пс.опер.DC    */
         T_SYM[ITSYM].ZNSYM = CHADR;  /*   запомн. в табл.симв. */
       }
       PRNMET = 'N'; /*  занулить PRNMET зн.'N'*/
+
+      CHADR = CHADR + 4;
     }
     else if (strncmp(operand, "BL", 2) == 0)
     {
-        T_SYM[ITSYM].DLSYM = operand[2] - '0';
+        int len = operand[2] - '0';
+        T_SYM[ITSYM].DLSYM = len;
         T_SYM[ITSYM].ZNSYM = CHADR;
         T_SYM[ITSYM].PRPER = 'R';
+        CHADR += len;
     }
     else
       return (1); /* иначе выход по ошибке  */
   }
-  else                             /*если же псевдооп.непомеч*/
-    if (CHADR % 4)                 /*и CHADR не кратен 4,то: */
-      CHADR = (CHADR / 4 + 1) * 4; /* установ.CHADR на гр.сл.*/
-
-  CHADR = CHADR + 4; /*увелич.CHADR на 4 и     */
+  else if (CHADR % 4)
+  {
+      /*если же псевдооп.непомеч*/
+      /*и CHADR не кратен 4,то: */
+      /* установ.CHADR на гр.сл.*/
+      CHADR = (CHADR / 4 + 1) * 4;
+      CHADR = CHADR + 4;
+  }
   return (0);        /*успешно завершить подпр.*/
 }
 /*..........................................................................*/
@@ -354,25 +361,38 @@ int FDS() /*подпр.обр.пс.опер.DS    */
         T_SYM[ITSYM].ZNSYM = CHADR;  /*   запомн. в табл.симв. */
       }
       PRNMET = 'N'; /*  занулить PRNMET зн.'N'*/
+
+      CHADR = CHADR + 4;
     }
     else if (strncmp(operand, "BL", 2) == 0)
     {
-        T_SYM[ITSYM].DLSYM = operand[2] - '0';
+        int len = operand[2] - '0';
+        T_SYM[ITSYM].DLSYM = len;
         T_SYM[ITSYM].ZNSYM = CHADR;
         T_SYM[ITSYM].PRPER = 'R';
+        CHADR += len;
     }
-    else if (strncmp(operand, "0H", 2) == 0)
+    else if (operand[1] == 'H')
     {
-        
+        int len = operand[0] - '0';
+        if (CHADR % 4 != 0)
+        {
+            CHADR = (CHADR / 4 + 1) * 4;
+            CHADR = CHADR + 4;
+        }
+        CHADR += len;
     }
     else
       return (1); /* иначе выход по ошибке  */
   }
-  else                             /*если же псевдооп.непомеч*/
-    if (CHADR % 4)                 /*и CHADR не кратен 4,то: */
-      CHADR = (CHADR / 4 + 1) * 4; /* установ.CHADR на гр.сл.*/
+  else if (CHADR % 4) {
+      /*если же псевдооп.непомеч*/
+      /*и CHADR не кратен 4,то: */
+      /* установ.CHADR на гр.сл.*/
+      CHADR = (CHADR / 4 + 1) * 4;
+      CHADR = CHADR + 4;
+  }
 
-  CHADR = CHADR + 4; /*увелич.CHADR на 4 и     */
   return (0);        /*успешно завершить подпр.*/
 }
 /*..........................................................................*/
@@ -785,7 +805,7 @@ int SRX() /*подпр.обр.опер.RX-форм. */
        " "        /*исх.текста АССЕМБЛЕРА   */
       );
 
-  if (isalpha((int)*METKA1))     /*если лексема начинается */
+  if (isalpha((int)*METKA1) || METKA1[0] == '@')     /*если лексема начинается */
   {                              /*с буквы, то:            */
     for (J = 0; J <= ITSYM; J++) /* все метки исх.текста в */
     {                            /* табл. T_SYM сравниваем */
