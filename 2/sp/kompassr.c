@@ -516,22 +516,42 @@ int SDC() /*подпр.обр.пс.опер.DC    */
 {
   char *RAB; /*рабочая переменная      */
 
+  char* operand = TEK_ISX_KARTA.STRUCT_BUFCARD.OPERAND;
+
   RX.OP_RX.OP = 0;                                  /*занулим два старших     */
   RX.OP_RX.R1X2 = 0;                                /*байта RX.OP_RX          */
+  RX.OP_RX.B2D2 = 0;
   if (                                              /* если операнд начинается*/
-      !memcmp(TEK_ISX_KARTA.STRUCT_BUFCARD.OPERAND, /* с комбинации           */
+      !memcmp(operand, /* с комбинации           */
               "F'", 2)                              /* F',                    */
       )                                             /* то                     */
   {
     RAB = strtok                                           /*в перем. c указат.RAB   */
         (                                                  /*выбираем первую лексему */
-         (char *)TEK_ISX_KARTA.STRUCT_BUFCARD.OPERAND + 2, /*операнда текущей карты  */
+         (char *)operand + 2, /*операнда текущей карты  */
          "'"                                               /*исх.текста АССЕМБЛЕРА   */
         );
 
     RX.OP_RX.B2D2 = atoi(RAB);    /*перевод ASCII-> int     */
     RAB = (char *)&RX.OP_RX.B2D2; /*приведение к соглашениям*/
     swab(RAB, RAB, 2);            /* ЕС ЭВМ                 */
+  }
+  else if (strncmp(operand, "BL", 2) == 0)
+  {
+      char * data_str = strtok(operand + 3, "'");
+      int result = 0;
+      int i = 0;
+      for (i = 0; i < strlen(data_str); ++i)
+      {
+          result <<= 1;
+          if (data_str[i] == '1')
+              result |= 1;
+      }
+
+      int len = operand[2] - '0';
+      result <<= (len * 8) - strlen(data_str);
+
+      RX.OP_RX.OP = result;
   }
   else          /*иначе                   */
     return (1); /*сообщение об ошибке     */
@@ -543,13 +563,19 @@ int SDC() /*подпр.обр.пс.опер.DC    */
 /*..........................................................................*/
 int SDS() /*подпр.обр.пс.опер.DS    */
 {
+  char* operand = TEK_ISX_KARTA.STRUCT_BUFCARD.OPERAND;
 
   RX.OP_RX.OP = 0;                                   /*занулим два старших     */
   RX.OP_RX.R1X2 = 0;                                 /*байта RX.OP_RX          */
   if (                                               /* если операнд начинается*/
-      TEK_ISX_KARTA.STRUCT_BUFCARD.OPERAND[0] == 'F' /* с комбинации F'        */
+      operand[0] == 'F'                              /* с комбинации F'        */
       )                                              /* то:                    */
     RX.OP_RX.B2D2 = 0;                               /*занулим RX.OP_RX.B2D2   */
+  else if (strncmp(operand, "BL", 2) == 0)
+  {
+      RX.OP_RX.B2D2 = 0;
+  }
+
   else                                               /*иначе                   */
     return (1);                                      /*сообщение об ошибке     */
 
