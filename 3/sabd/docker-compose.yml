@@ -1,0 +1,34 @@
+services:
+  elasticsearch:
+    image: elasticsearch:9.1.4
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports:
+      - 9200:9200
+
+  logstash:
+    image: logstash:9.1.4
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    volumes:
+      - "./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro"
+      - "./test.csv:/usr/share/logstash/data/data.csv:ro"
+  
+  kibana:
+    image: kibana:9.1.4
+    ports:
+      - 5601:5601
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      interval: 30s
+      timeout: 5s
+      retries: 10
