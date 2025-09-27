@@ -11,6 +11,8 @@ services:
       retries: 10
     ports:
       - 9200:9200
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
 
   logstash:
     image: logstash:9.1.4
@@ -19,7 +21,8 @@ services:
         condition: service_healthy
     volumes:
       - "./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro"
-      - "./test.csv:/usr/share/logstash/data/data.csv:ro"
+      - "./data:/data:ro"
+      - "logstash_data:/usr/share/logstash/data"
   
   kibana:
     image: kibana:9.1.4
@@ -32,3 +35,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 10
+
+volumes:
+  elasticsearch_data:
+  logstash_data:

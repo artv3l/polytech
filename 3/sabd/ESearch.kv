@@ -1,0 +1,41 @@
+<SearchScreen>:
+    result: result
+    url: url
+    field: field
+    request: request
+    index: index
+
+    orientation: 'vertical'
+    BoxLayout:
+        size_hint_y: None
+        Label:
+            text: "Host:Port"
+        TextInput:
+            id: url
+            text: "localhost:9200"
+            multiline: False
+    BoxLayout:
+        size_hint_y: None
+        Label:
+            text: "Search request (field and value)"
+        TextInput:
+            id: field
+            text: "city"
+        TextInput:
+            id: request
+            text: "Москва"
+    BoxLayout:
+        size_hint_y: None
+        Label:
+            text: "Result index"
+        TextInput:
+            id: index
+            text: "0"
+        Button:
+            text: "Search"
+            on_release: root.on_search()
+    Label:
+        id: result
+        text: "Search result"
+        text_size: self.width, None
+        height: self.texture_size[1]
