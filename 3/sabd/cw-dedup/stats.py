@@ -47,18 +47,17 @@ def store_operation_stats(
     file: typing.BinaryIO,
     chunk_size: int,
     ref_file: typing.BinaryIO,
-    collection: pymongo.collection.Collection,
-    datafile: typing.BinaryIO,
+    storage: dedup.Storage,
 ):
-    init_datafile_size = get_size(datafile)
-    init_collection_size = get_size(collection)
+    init_datafile_size = get_size(storage.datafile)
+    init_collection_size = get_size(storage.collection)
 
     exec_time = get_exec_time(
-        bind(dedup.store_file, file, chunk_size, ref_file, collection, datafile)
+        bind(dedup.store_file, file, chunk_size, ref_file, storage)
     )
 
-    diff_datafile_size = get_size(datafile) - init_datafile_size
-    diff_collection_size = get_size(collection) - init_collection_size
+    diff_datafile_size = get_size(storage.datafile) - init_datafile_size
+    diff_collection_size = get_size(storage.collection) - init_collection_size
 
     print(
         f"Total memory diff: {diff_datafile_size + diff_collection_size - get_size(file) + get_size(ref_file)}"
