@@ -12,7 +12,7 @@ if __name__ == "__main__":
             open(filepath, "rb") as file,
             open(f"{filepath}.ref", "wb") as ref_file,
         ):
-            stats.store_operation_stats(file, 10 * 1024, ref_file, storage)
+            stats.store_operation_stats(file, 4, ref_file, storage)
 
         with (
             open(f"{filepath}.ref", "rb") as ref_file,
@@ -24,7 +24,6 @@ if __name__ == "__main__":
                     ref_file,
                     dedup.get_hash_size(),
                     out_file,
-                    storage.collection,
-                    storage.datafile,
+                    storage
                 )
             )

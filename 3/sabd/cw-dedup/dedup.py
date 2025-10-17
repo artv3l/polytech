@@ -94,6 +94,17 @@ class Storage:
         if len(self.chunk_cache) >= 100:
             return self.flush()
         return None
+    
+    def get_chunks(self, hashes):
+        docs = self.collection.find({"hash_val": {"$in": hashes}}, {"position": 1, "size": 1, "hash_val": 1})
+        docs_by_hash = {doc["hash_val"]: doc for doc in docs}
+
+        result = []
+        for hash_val in hashes:
+            doc = docs_by_hash[hash_val]
+            self.datafile.seek(doc['position'])
+            result.append(self.datafile.read(doc['size']))
+        return result
 
 
 def store_file(
@@ -118,18 +129,9 @@ def extract_file(
     ref_file: typing.BinaryIO,
     hash_len: int,
     out_file: typing.BinaryIO,
-    collection: pymongo.collection.Collection,
-    datafile: typing.BinaryIO,
+    storage: Storage,
 ):
-    while True:
-        hash_val: Hash = ref_file.read(hash_len)
-        if not hash_val:
-            break
-
-        found = collection.find_one({"hash_val": hash_val})
-        if not found:
-            raise RuntimeError("Hash not found")
-
-        ref = Ref(**found)
-        datafile.seek(ref.position)
-        out_file.write(datafile.read(ref.size))
+    while batch := ref_file.read(hash_len * 50):
+        hashes = [batch[i:i+hash_len] for i in range(0, len(batch), hash_len)]
+        out_file.write(b''.join(storage.get_chunks(hashes)))
+        
