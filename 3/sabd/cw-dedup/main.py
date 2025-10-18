@@ -1,29 +1,23 @@
 import dedup
 import stats
+import params
+import pathlib
 
 
 if __name__ == "__main__":
-    filepath: str = "test/test.txt"
+    filepath = pathlib.Path("test/01. Barricades.flac")
 
     with dedup.Storage(
         "mongodb://root:root@localhost:27017/", "sabd-cw", "refs", "test/data.bin"
     ) as storage:
         with (
             open(filepath, "rb") as file,
-            open(f"{filepath}.ref", "wb") as ref_file,
+            open(params.fmt_ref(filepath), "wb") as ref_file,
         ):
-            stats.store_operation_stats(file, 4, ref_file, storage)
+            stats.store_operation_stats(file, params.chunk_size, ref_file, storage)
 
         with (
-            open(f"{filepath}.ref", "rb") as ref_file,
-            open(f"{filepath}.ref.out", "wb") as out_file,
+            open(params.fmt_ref(filepath), "rb") as ref_file,
+            open(params.fmt_deref(filepath), "wb") as out_file,
         ):
-            stats.print_exec_time(
-                stats.bind(
-                    dedup.get_file,
-                    ref_file,
-                    dedup.get_hash_size(),
-                    out_file,
-                    storage
-                )
-            )
+            stats.get_operation_stats(ref_file, out_file, storage)

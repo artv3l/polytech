@@ -3,6 +3,7 @@ import pymongo
 import pydantic
 import os
 import params
+import pathlib
 
 Chunk = bytearray
 Hash = bytes
@@ -40,7 +41,7 @@ class Ref(pydantic.BaseModel):
 
 class Storage:
     def __init__(
-        self, url: str, db_name: str, collection_name: str, datafile_name: str
+        self, url: str, db_name: str, collection_name: str, datafile_name: pathlib.Path
     ):
         self.url = url
         self.db_name = db_name
