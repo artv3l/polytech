@@ -1,8 +1,8 @@
 import typing
 import pymongo
 import pydantic
-import hashlib
 import os
+import params
 
 Chunk = bytearray
 Hash = bytes
@@ -11,7 +11,7 @@ Hashes = typing.List[Hash]
 
 
 def _calc_hash(chunk: Chunk):
-    return hashlib.md5(chunk)
+    return params.hash_func(chunk)
 
 
 def calc_hash(chunk: Chunk) -> Hash:
@@ -51,7 +51,7 @@ class Storage:
     def __enter__(self):
         self.client = pymongo.MongoClient(self.url)
         self.collection = self.client[self.db_name][self.collection_name]
-        self.collection.create_index("hash_val", unique=True)
+        self.collection.create_index(params.db_names.hash_val, unique=True)
         self.datafile = open(self.datafile_name, "a+b")
         return self
 
@@ -69,7 +69,7 @@ class Storage:
             new_ref = Ref(hash_val=hash_val, position=0, ref_count=0, size=chunk_len)
             operations.append(
                 pymongo.UpdateOne(
-                    {"hash_val": hash_val},
+                    {params.db_names.hash_val: hash_val},
                     {"$setOnInsert": new_ref.model_dump()},
                     upsert=True,
                 )
@@ -78,12 +78,14 @@ class Storage:
 
         operations = []
         for index, chunk in enumerate(self.chunk_cache):
-            oper = {"$inc": {"ref_count": 1}}
+            oper = {"$inc": {params.db_names.ref_count: 1}}
             if index in result.upserted_ids:
                 position: Position = to_end_position(self.datafile)
                 new_datafile_chunk(chunk, self.datafile, position)
-                oper["$set"] = {"position": position}
-            operations.append(pymongo.UpdateOne({"hash_val": hashes[index]}, oper))
+                oper["$set"] = {params.db_names.position: position}
+            operations.append(
+                pymongo.UpdateOne({params.db_names.hash_val: hashes[index]}, oper)
+            )
         self.collection.bulk_write(operations, ordered=False)
 
         self.chunk_cache = []
@@ -91,19 +93,26 @@ class Storage:
 
     def insert_chunk(self, chunk: Chunk) -> typing.Optional[Hashes]:
         self.chunk_cache.append(chunk)
-        if len(self.chunk_cache) >= 100:
+        if len(self.chunk_cache) >= params.insert_cache_size:
             return self.flush()
         return None
-    
+
     def get_chunks(self, hashes):
-        docs = self.collection.find({"hash_val": {"$in": hashes}}, {"position": 1, "size": 1, "hash_val": 1})
-        docs_by_hash = {doc["hash_val"]: doc for doc in docs}
+        docs = self.collection.find(
+            {params.db_names.hash_val: {"$in": hashes}},
+            {
+                params.db_names.position: 1,
+                params.db_names.size: 1,
+                params.db_names.hash_val: 1,
+            },
+        )
+        docs_by_hash = {doc[params.db_names.hash_val]: doc for doc in docs}
 
         result = []
         for hash_val in hashes:
             doc = docs_by_hash[hash_val]
-            self.datafile.seek(doc['position'])
-            result.append(self.datafile.read(doc['size']))
+            self.datafile.seek(doc[params.db_names.position])
+            result.append(self.datafile.read(doc[params.db_names.size]))
         return result
 
 
@@ -125,13 +134,12 @@ def store_file(
         ref_file.write(b"".join(hashes))
 
 
-def extract_file(
+def get_file(
     ref_file: typing.BinaryIO,
     hash_len: int,
     out_file: typing.BinaryIO,
     storage: Storage,
 ):
-    while batch := ref_file.read(hash_len * 50):
-        hashes = [batch[i:i+hash_len] for i in range(0, len(batch), hash_len)]
-        out_file.write(b''.join(storage.get_chunks(hashes)))
-        
+    while batch := ref_file.read(hash_len * params.get_cache_size):
+        hashes = [batch[i : i + hash_len] for i in range(0, len(batch), hash_len)]
+        out_file.write(b"".join(storage.get_chunks(hashes)))

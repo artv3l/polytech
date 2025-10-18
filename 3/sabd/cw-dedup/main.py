@@ -3,10 +3,10 @@ import stats
 
 
 if __name__ == "__main__":
-    filepath: str = "test.txt"
+    filepath: str = "test/test.txt"
 
     with dedup.Storage(
-        "mongodb://root:root@localhost:27017/", "sabd-cw", "refs", "data.bin"
+        "mongodb://root:root@localhost:27017/", "sabd-cw", "refs", "test/data.bin"
     ) as storage:
         with (
             open(filepath, "rb") as file,
@@ -20,7 +20,7 @@ if __name__ == "__main__":
         ):
             stats.print_exec_time(
                 stats.bind(
-                    dedup.extract_file,
+                    dedup.get_file,
                     ref_file,
                     dedup.get_hash_size(),
                     out_file,
