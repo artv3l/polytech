@@ -2,7 +2,7 @@ import hashlib
 import dataclasses
 import pathlib
 
-chunk_size = 1024
+chunk_size = 21763
 insert_cache_size = 100
 get_cache_size = 50
 
@@ -19,7 +19,10 @@ class DbNames:
 db_names = DbNames()
 
 
+ref_suffix = ".ref"
+deref_suffix = "_deref"
+
 def fmt_ref(filename: pathlib.Path) -> pathlib.Path:
-    return filename.with_name(filename + ".ref")
+    return filename.with_name(filename.name + ref_suffix)
 def fmt_deref(filename: pathlib.Path) -> pathlib.Path:
-    return filename.with_name(filename.stem + "_deref" + filename.suffix)
+    return filename.with_name(filename.stem + deref_suffix + filename.suffix)

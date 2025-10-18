@@ -61,6 +61,9 @@ class Storage:
         self.datafile.close()
 
     def flush(self) -> typing.Optional[Hashes]:
+        if len(self.chunk_cache) == 0:
+            return None
+        
         hashes = [calc_hash(chunk) for chunk in self.chunk_cache]
 
         operations = []
@@ -115,7 +118,11 @@ class Storage:
             self.datafile.seek(doc[params.db_names.position])
             result.append(self.datafile.read(doc[params.db_names.size]))
         return result
-
+    
+    def clean(self):
+        self.datafile.truncate(0)
+        self.datafile.seek(0)
+        self.collection.delete_many({})
 
 def store_file(
     file: typing.BinaryIO,
