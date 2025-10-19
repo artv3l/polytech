@@ -2,7 +2,7 @@ import hashlib
 import dataclasses
 import pathlib
 
-chunk_size = 2048
+chunk_size = 50 * 2**10
 insert_cache_size = 100
 get_cache_size = 50
 

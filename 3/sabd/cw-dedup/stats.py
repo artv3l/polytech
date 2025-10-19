@@ -32,10 +32,11 @@ def get_size(obj) -> int:
         return get_file_size(obj)
 
 
+# Статистика операции записи
 class StorageStatsDiff(pydantic.BaseModel):
-    datafile_size: int
-    db_size: int
-    time_seconds: float
+    datafile_size: int  # Изменение размера файла с уникальными данными
+    db_size: int  # Изменение размера базы данных
+    time_seconds: float  # Время выполнения
 
 
 class StorageStats(pydantic.BaseModel):
@@ -51,11 +52,13 @@ class StorageStats(pydantic.BaseModel):
         )
 
 
+# Статистика с точки зрения пользователя
 class UserStats(pydantic.BaseModel):
-    file_size: int
-    ref_file_size: int
+    file_size: int  # Размер исходного файла
+    ref_file_size: int  # Размер файла-ссылки (с хэшами)
 
 
+# Базовая статистика выполнения операции
 class BaseStats(pydantic.BaseModel):
     storage_stats_diff: StorageStatsDiff
     user_stats: UserStats
@@ -67,6 +70,7 @@ class BaseStats(pydantic.BaseModel):
         return self.user_stats.file_size / self.storage_stats_diff.time_seconds
 
 
+# Статистика операции записи
 class StoreStats(BaseStats):
     # Процент дедупликации
     @pydantic.computed_field
@@ -93,6 +97,7 @@ class StoreStats(BaseStats):
     Stored {self.user_stats.file_size / 2**20:.2f} MB in {self.storage_stats_diff.time_seconds:.2f} s, {self.speed / 2**20:.2f} MB/s"""
 
 
+# Статистика операции чтения
 class GetStats(BaseStats):
     def __str__(self):
         return f"""Get:
@@ -317,10 +322,48 @@ def make_graph(json_filename: pathlib.Path):
             (
                 bind(
                     plot_values_by_chunk_size,
-                    extract_func=lambda file_info: file_info.store_stats.mem_diff / 2**20,
+                    extract_func=lambda file_info: file_info.store_stats.mem_diff
+                    / 2**20,
                     ylabel="mem_diff, MB",
                 ),
                 binded_save("mem_diffs"),
             ),
+            (
+                bind(
+                    plot_values_by_chunk_size,
+                    extract_func=lambda file_info: file_info.store_stats.storage_stats_diff.time_seconds,
+                    ylabel="store_time, s",
+                ),
+                binded_save("store_time"),
+            ),
         ],
     )
+
+
+if __name__ == "__main__":
+    folder = pathlib.Path.cwd() / pathlib.Path("test")
+
+    files = [
+        folder / pathlib.Path("01. Barricades.flac"),
+        # folder / pathlib.Path("01. Barricades copy.flac"),
+        # folder / pathlib.Path("img.bmp"),
+        # folder / pathlib.Path("img2.bmp"),
+    ]
+
+    with dedup.Storage(
+        "mongodb://root:root@localhost:27017/", "sabd-cw", "refs", "test/data.bin"
+    ) as storage:
+        calc_chunk_size(
+            storage,
+            files,
+            CalcChunkSizeParams(begin=int(1 * 2**10), end=int(5 * 2**10), count=10),
+        )
+
+
+if __name__ == "__main__1":
+    file = (
+        pathlib.Path.cwd()
+        / pathlib.Path("test")
+        / pathlib.Path("01. Barricades copy.flac.json")
+    )
+    jsons = make_graph(file)
