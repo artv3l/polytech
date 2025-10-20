@@ -159,14 +159,47 @@ class FileInfo(pydantic.BaseModel):
 CalcChunkSizeResult = typing.Dict[int, typing.List[FileInfo]]
 
 
-def fmt_stat(filename: pathlib.Path) -> pathlib.Path:
-    return filename.with_name(filename.name + ".json")
+
+def calc_chunk_size_for_file(file: pathlib.Path, chunk_size: int):
+    if not file.is_file():
+        return
+    file_size = get_size(file)
+    if file_size == 0:
+        return
+
+    file_name = file.relative_to(pathlib.Path.cwd())
+
+    ref_filepath = params.fmt_ref(file_name)
+    out_filepath = params.fmt_deref(file_name)
+    with (
+        open(file_name, "rb") as file_s,
+        open(ref_filepath, "wb") as ref_file,
+    ):
+        store_stats = store_operation_stats(
+            file_s, chunk_size, ref_file, storage
+        )
+    with (
+        open(ref_filepath, "rb") as ref_file,
+        open(out_filepath, "wb") as out_file,
+    ):
+        get_stats = get_operation_stats(ref_file, out_file, storage)
+
+    ref_filepath.unlink()
+    out_filepath.unlink()
+
+    return FileInfo(
+        file_name=file_name.name,
+        file_size=file_size,
+        store_stats=store_stats,
+        get_stats=get_stats,
+    )
 
 
 def calc_chunk_size(
     storage: dedup.Storage,
     files: typing.List[pathlib.Path],
     calc_params: CalcChunkSizeParams,
+    out_filename: pathlib.Path
 ):
     result: CalcChunkSizeResult = {}
 
@@ -175,48 +208,25 @@ def calc_chunk_size(
         storage.clean()
         result[chunk_size] = []
 
-        for file in files:
-            if not file.is_file():
-                return
-            file_size = get_size(file)
-            if file_size == 0:
-                continue
+        temp = {}
+        for _ in range(10):
+            for file in files:
+                if file.name not in temp:
+                    temp[file.name] = []
+                temp[file.name].append(calc_chunk_size_for_file(file, chunk_size))
+        for infos in temp.values():
+            main_info = infos[0]
+            for info in infos[1:]:
+                main_info.store_stats.storage_stats_diff.time_seconds += info.store_stats.storage_stats_diff.time_seconds
+            main_info.store_stats.storage_stats_diff.time_seconds /= len(infos)
+            result[chunk_size].append(main_info)
 
-            file_name = file.relative_to(pathlib.Path.cwd())
-
-            ref_filepath = params.fmt_ref(file_name)
-            out_filepath = params.fmt_deref(file_name)
-            with (
-                open(file_name, "rb") as file_s,
-                open(ref_filepath, "wb") as ref_file,
-            ):
-                store_stats = store_operation_stats(
-                    file_s, chunk_size, ref_file, storage
-                )
-            with (
-                open(ref_filepath, "rb") as ref_file,
-                open(out_filepath, "wb") as out_file,
-            ):
-                get_stats = get_operation_stats(ref_file, out_file, storage)
-
-            result[chunk_size].append(
-                FileInfo(
-                    file_name=file_name.name,
-                    file_size=file_size,
-                    store_stats=store_stats,
-                    get_stats=get_stats,
-                )
-            )
-
-            ref_filepath.unlink()
-            out_filepath.unlink()
 
     result_json = {
         chunk_size: [file_info.model_dump() for file_info in file_infos]
         for chunk_size, file_infos in result.items()
     }
-    json_filename = fmt_stat(file_name)
-    with open(json_filename, "w") as stat_file:
+    with open(out_filename, "w") as stat_file:
         json.dump(result_json, stat_file, indent=4)
 
 
@@ -340,14 +350,14 @@ def make_graph(json_filename: pathlib.Path):
     )
 
 
-if __name__ == "__main__":
+if __name__ == "__main__1":
     folder = pathlib.Path.cwd() / pathlib.Path("test")
 
     files = [
-        folder / pathlib.Path("01. Barricades.flac"),
+        #folder / pathlib.Path("01. Barricades.flac"),
         # folder / pathlib.Path("01. Barricades copy.flac"),
-        # folder / pathlib.Path("img.bmp"),
-        # folder / pathlib.Path("img2.bmp"),
+        folder / pathlib.Path("img.bmp"),
+        folder / pathlib.Path("img2.bmp"),
     ]
 
     with dedup.Storage(
@@ -356,14 +366,15 @@ if __name__ == "__main__":
         calc_chunk_size(
             storage,
             files,
-            CalcChunkSizeParams(begin=int(1 * 2**10), end=int(5 * 2**10), count=10),
+            CalcChunkSizeParams(begin=int(128), end=int(6128), count=20),
+            "test/images.json"
         )
 
 
-if __name__ == "__main__1":
+if __name__ == "__main__":
     file = (
         pathlib.Path.cwd()
         / pathlib.Path("test")
-        / pathlib.Path("01. Barricades copy.flac.json")
+        / pathlib.Path("images.json")
     )
     jsons = make_graph(file)
