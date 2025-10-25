@@ -12,3 +12,6 @@ obj/
 *.vcxitems.filters
 
 vcpkg_installed/
+
+# Python
+__pycache__/
