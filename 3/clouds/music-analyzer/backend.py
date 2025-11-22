@@ -1,0 +1,80 @@
+from flask import Flask, request, jsonify
+from pymongo import MongoClient
+import gridfs
+import librosa
+from bson import ObjectId
+import datetime
+import time
+import threading
+
+import params
+
+app = Flask(__name__)
+
+mongo_client = MongoClient("mongodb://root:root@localhost:27017/")
+file_db = gridfs.GridFS(mongo_client["cw"])
+coll_analyzes = mongo_client["cw"][params.names.coll_analyzes]
+coll_results = mongo_client["cw"][params.names.coll_results]
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    c_file_key = "file"
+    c_filename_field_name = "filename"
+
+    if c_file_key not in request.files:
+        return jsonify({"Message": "No file"}), 400
+    
+    file = request.files[c_file_key]
+    file_id = file_db.put(file.stream, **{c_filename_field_name: file.filename})
+
+    result = coll_analyzes.insert_one({
+        "file_id": file_id,
+        "status": "waiting",
+        "created_at": datetime.datetime.now(),
+        "result_id": None,
+    })
+
+    return jsonify({
+        "message": f"File \"{file.filename}\" uploaded. Analyze is started.",
+        "file_id": str(file_id),
+        "analyze_id": str(result.inserted_id),
+    })
+
+def analyze(task):
+    audio_stream = file_db.get(ObjectId(task["file_id"]))
+    y, sample_rate = librosa.load(audio_stream, sr=None)
+
+    tempo, beats = librosa.beat.beat_track(y=y, sr=sample_rate)
+    print("Tempo (BPM):", tempo)
+    print("Number of beats:", len(beats))
+    print("Sample rate:", sample_rate)
+    print("Duration (sec):", librosa.get_duration(y=y, sr=sample_rate))
+    print("Number of samples:", len(y))
+
+    coll_results.insert_one({
+        "bpm": tempo[0],
+        "sample_rate": sample_rate,
+        "duration": librosa.get_duration(y=y, sr=sample_rate),
+    })
+    coll_analyzes.update_one(
+        {"_id": task["_id"]},
+        {"$set": {"status": "ready"}}
+    )
+
+def analyzer():
+    while True:
+        task = coll_analyzes.find_one_and_update(
+            {"status": "waiting"},
+            {"$set": {"status": "running"}},
+            sort=[("created_at", 1)]
+        )
+        if task:
+            print(f"start {task}")
+            analyze(task)
+        else:
+            print("wait")
+            time.sleep(1)
+
+if __name__ == "__main__":
+    threading.Thread(target=analyzer, daemon=True).start()
+    app.run(host="0.0.0.0", port=8080)
