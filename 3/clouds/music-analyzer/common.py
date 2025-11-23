@@ -1,7 +1,7 @@
 import datetime
 from email.utils import parsedate_to_datetime
 
-from pydantic import BaseModel, Field, AliasChoices, field_validator, ValidationInfo
+from pydantic import BaseModel, Field, AliasChoices, field_validator
 from bson import ObjectId
 
 class ObjectIdStr:
@@ -32,3 +32,9 @@ class Analyze(BaseModel):
         if isinstance(v, str):
             return parsedate_to_datetime(v)
         return v
+
+class Result(BaseModel):
+    id: ObjectIdStr = Field(validation_alias=AliasChoices('id', '_id'))
+    bpm: float
+    sample_rate: int
+    duration: float

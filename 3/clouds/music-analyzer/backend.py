@@ -48,6 +48,12 @@ def get_analyzes():
     found = coll_analyzes.find(sort=[("created_at", -1)])
     return jsonify([common.Analyze(**doc).model_dump() for doc in found])
 
+@app.route('/result/<id>', methods=['GET'])
+def get_result(id: str):
+    print(id)
+    res = coll_results.find_one({"_id": ObjectId(id)})
+    return common.Result(**res).model_dump()
+
 def analyze(task):
     audio_stream = file_db.get(ObjectId(task["file_id"]))
     y, sample_rate = librosa.load(audio_stream, sr=None)
@@ -59,14 +65,14 @@ def analyze(task):
     print("Duration (sec):", librosa.get_duration(y=y, sr=sample_rate))
     print("Number of samples:", len(y))
 
-    coll_results.insert_one({
+    result = coll_results.insert_one({
         "bpm": tempo[0],
         "sample_rate": sample_rate,
         "duration": librosa.get_duration(y=y, sr=sample_rate),
     })
     coll_analyzes.update_one(
         {"_id": task["_id"]},
-        {"$set": {"status": "ready"}}
+        {"$set": {"status": "ready", "result_id": str(result.inserted_id)}}
     )
 
 def analyzer():

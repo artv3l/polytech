@@ -9,6 +9,10 @@ def update_analyzes():
     response = requests.get(f"{c_backend_url}/analyzes")
     st.session_state.analyzes = {doc["id"]: common.Analyze(**doc) for doc in response.json()}
 
+def get_result(id):
+    response = requests.get(f"{c_backend_url}/result/{id}")
+    return common.Result(**response.json())
+
 st.session_state.setdefault("current_page", "Upload")
 if st.session_state.setdefault("analyzes", []):
     update_analyzes()
@@ -43,7 +47,12 @@ if st.session_state.current_page == "Upload":
 else:
     analyze: common.Analyze = st.session_state.analyzes[st.session_state.current_page]
     st.title(analyze.title)
-
     st.text(f"Status: {analyze.status}")
     if analyze.status == "ready":
-        st.text("Result")
+        st.divider()
+        result = get_result(analyze.result_id)
+
+        st.text(f"Длительность: {result.duration} c.")
+        st.text(f"BPM: {result.bpm}")
+        st.text(f"Частота дискретизации: {result.sample_rate}")
+        
