@@ -29,5 +29,7 @@ services:
     image: grafana/grafana:12.1
     volumes:
       - "./datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml"
+      - ./dashboard.yaml:/etc/grafana/provisioning/dashboards/main.yaml
+      - ./dashboards:/var/lib/grafana/dashboards
     ports:
       - "3000:3000"

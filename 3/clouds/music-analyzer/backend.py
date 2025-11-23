@@ -15,10 +15,9 @@ import common
 
 request_latency = Histogram('flask_request_latency_seconds', 'Request latency', ['endpoint'])
 
-audio_analysis_duration = Gauge(
+audio_analysis_duration = Histogram(
     "audio_analysis_duration_seconds",
     "Time spent analyzing audio file",
-    ["file_id", "filename"],
 )
 
 app = Flask(__name__)
@@ -67,7 +66,6 @@ def get_analyzes():
 @app.route('/result/<id>', methods=['GET'])
 @request_latency.labels(endpoint='/result').time()
 def get_result(id: str):
-    print(id)
     res = coll_results.find_one({"_id": ObjectId(id)})
     return common.Result(**res).model_dump()
 
@@ -78,7 +76,7 @@ def analyze(task):
     y, sample_rate = librosa.load(file, sr=None)
     tempo, beats = librosa.beat.beat_track(y=y, sr=sample_rate)
     
-    audio_analysis_duration.labels(file_id=task["file_id"], filename=file.filename).set(time.time() - start_time)
+    audio_analysis_duration.observe(time.time() - start_time)
 
     result = coll_results.insert_one({
         "bpm": tempo[0],
