@@ -1,13 +1,15 @@
+import threading
+import datetime
+import time
+
 from flask import Flask, request, jsonify
 from pymongo import MongoClient
 import gridfs
 import librosa
 from bson import ObjectId
-import datetime
-import time
-import threading
 
 import params
+import common
 
 app = Flask(__name__)
 
@@ -22,13 +24,14 @@ def upload():
     c_filename_field_name = "filename"
 
     if c_file_key not in request.files:
-        return jsonify({"Message": "No file"}), 400
+        return jsonify({"message": "No file"}), 400
     
     file = request.files[c_file_key]
     file_id = file_db.put(file.stream, **{c_filename_field_name: file.filename})
 
     result = coll_analyzes.insert_one({
         "file_id": file_id,
+        "title": file.filename,
         "status": "waiting",
         "created_at": datetime.datetime.now(),
         "result_id": None,
@@ -39,6 +42,11 @@ def upload():
         "file_id": str(file_id),
         "analyze_id": str(result.inserted_id),
     })
+
+@app.route('/analyzes', methods=['GET'])
+def get_analyzes():
+    found = coll_analyzes.find(sort=[("created_at", -1)])
+    return jsonify([common.Analyze(**doc).model_dump() for doc in found])
 
 def analyze(task):
     audio_stream = file_db.get(ObjectId(task["file_id"]))
@@ -69,10 +77,8 @@ def analyzer():
             sort=[("created_at", 1)]
         )
         if task:
-            print(f"start {task}")
             analyze(task)
         else:
-            print("wait")
             time.sleep(1)
 
 if __name__ == "__main__":
