@@ -1,4 +1,5 @@
 import requests
+
 import streamlit as st
 
 import common
@@ -14,7 +15,7 @@ def get_result(id):
     return common.Result(**response.json())
 
 st.session_state.setdefault("current_page", "Upload")
-if st.session_state.setdefault("analyzes", []):
+if st.session_state.setdefault("analyzes", {}):
     update_analyzes()
 
 
@@ -44,6 +45,7 @@ if st.session_state.current_page == "Upload":
         else:
             st.success(response.json()["message"])
             update_analyzes()
+            st.rerun()
 else:
     analyze: common.Analyze = st.session_state.analyzes[st.session_state.current_page]
     st.title(analyze.title)
@@ -55,4 +57,3 @@ else:
         st.text(f"Длительность: {result.duration} c.")
         st.text(f"BPM: {result.bpm}")
         st.text(f"Частота дискретизации: {result.sample_rate}")
-        

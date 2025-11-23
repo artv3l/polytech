@@ -7,11 +7,25 @@ from pymongo import MongoClient
 import gridfs
 import librosa
 from bson import ObjectId
+from prometheus_client import make_wsgi_app, Histogram, Gauge
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 import params
 import common
 
+request_latency = Histogram('flask_request_latency_seconds', 'Request latency', ['endpoint'])
+
+audio_analysis_duration = Gauge(
+    "audio_analysis_duration_seconds",
+    "Time spent analyzing audio file",
+    ["file_id", "filename"],
+)
+
 app = Flask(__name__)
+
+app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
+    '/metrics': make_wsgi_app()
+})
 
 mongo_client = MongoClient("mongodb://root:root@localhost:27017/")
 file_db = gridfs.GridFS(mongo_client["cw"])
@@ -19,6 +33,7 @@ coll_analyzes = mongo_client["cw"][params.names.coll_analyzes]
 coll_results = mongo_client["cw"][params.names.coll_results]
 
 @app.route('/upload', methods=['POST'])
+@request_latency.labels(endpoint='/upload').time()
 def upload():
     c_file_key = "file"
     c_filename_field_name = "filename"
@@ -44,26 +59,26 @@ def upload():
     })
 
 @app.route('/analyzes', methods=['GET'])
+@request_latency.labels(endpoint='/analyzes').time()
 def get_analyzes():
     found = coll_analyzes.find(sort=[("created_at", -1)])
     return jsonify([common.Analyze(**doc).model_dump() for doc in found])
 
 @app.route('/result/<id>', methods=['GET'])
+@request_latency.labels(endpoint='/result').time()
 def get_result(id: str):
     print(id)
     res = coll_results.find_one({"_id": ObjectId(id)})
     return common.Result(**res).model_dump()
 
 def analyze(task):
-    audio_stream = file_db.get(ObjectId(task["file_id"]))
-    y, sample_rate = librosa.load(audio_stream, sr=None)
+    file = file_db.get(ObjectId(task["file_id"]))
 
+    start_time = time.time()
+    y, sample_rate = librosa.load(file, sr=None)
     tempo, beats = librosa.beat.beat_track(y=y, sr=sample_rate)
-    print("Tempo (BPM):", tempo)
-    print("Number of beats:", len(beats))
-    print("Sample rate:", sample_rate)
-    print("Duration (sec):", librosa.get_duration(y=y, sr=sample_rate))
-    print("Number of samples:", len(y))
+    
+    audio_analysis_duration.labels(file_id=task["file_id"], filename=file.filename).set(time.time() - start_time)
 
     result = coll_results.insert_one({
         "bpm": tempo[0],
