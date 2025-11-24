@@ -38,3 +38,4 @@ class Result(BaseModel):
     bpm: float
     sample_rate: int
     duration: float
+    spectrogram_id: ObjectIdStr

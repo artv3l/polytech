@@ -12,7 +12,9 @@ def update_analyzes():
 
 def get_result(id):
     response = requests.get(f"{c_backend_url}/result/{id}")
-    return common.Result(**response.json())
+    result = common.Result(**response.json())
+    img = requests.get(f"{c_backend_url}/file/{result.spectrogram_id}")
+    return result, img.content
 
 st.session_state.setdefault("current_page", "Upload")
 if st.session_state.setdefault("analyzes", {}):
@@ -52,8 +54,9 @@ else:
     st.text(f"Status: {analyze.status}")
     if analyze.status == "ready":
         st.divider()
-        result = get_result(analyze.result_id)
+        result, img = get_result(analyze.result_id)
 
         st.text(f"Длительность: {result.duration} c.")
         st.text(f"BPM: {result.bpm}")
         st.text(f"Частота дискретизации: {result.sample_rate}")
+        st.image(img)

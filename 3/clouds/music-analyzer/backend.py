@@ -1,14 +1,17 @@
 import threading
 import datetime
 import time
+import io
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from pymongo import MongoClient
 import gridfs
 import librosa
 from bson import ObjectId
-from prometheus_client import make_wsgi_app, Histogram, Gauge
+from prometheus_client import make_wsgi_app, Histogram
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
+import numpy as np
+import matplotlib.pyplot as plt
 
 import params
 import common
@@ -69,19 +72,50 @@ def get_result(id: str):
     res = coll_results.find_one({"_id": ObjectId(id)})
     return common.Result(**res).model_dump()
 
+@app.route('/file/<id>', methods=['GET'])
+@request_latency.labels(endpoint='/file').time()
+def get_file(id: str):
+    file = file_db.get(ObjectId(id))
+    return Response(file.read(), mimetype="image/png")
+
 def analyze(task):
     file = file_db.get(ObjectId(task["file_id"]))
 
     start_time = time.time()
     y, sample_rate = librosa.load(file, sr=None)
-    tempo, beats = librosa.beat.beat_track(y=y, sr=sample_rate)
+    tempo, _ = librosa.beat.beat_track(y=y, sr=sample_rate)
     
+    n_fft = 2048  # Window size: 2048 samples (adjust based on frequency resolution)  
+    stft_result = librosa.stft(y, n_fft=n_fft)
+    magnitude_spectrogram = np.abs(stft_result) # Compute magnitude spectrogram (absolute value of STFT result)
+    db_spectrogram = librosa.amplitude_to_db(magnitude_spectrogram, ref=np.max) # Convert to dB scale (logarithmic)
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    img = librosa.display.specshow(
+        db_spectrogram,
+        ax=ax,
+        sr=sample_rate,
+        x_axis="time",  # Label x-axis as time  
+        y_axis="hz",    # Label y-axis as frequency (Hz)  
+        cmap="viridis"  # Colormap (try "magma" or "plasma" for different looks)
+    )
+    fig.colorbar(img, ax=ax, format="%+2.0f dB") # Show amplitude in dB
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Frequency (Hz)")
+    ax.set_title("Spectrogram (dB Scale)")
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0)
+    buf.seek(0)
+
     audio_analysis_duration.observe(time.time() - start_time)
 
+    spectrogram_id = file_db.put(buf)
     result = coll_results.insert_one({
         "bpm": tempo[0],
         "sample_rate": sample_rate,
         "duration": librosa.get_duration(y=y, sr=sample_rate),
+        "spectrogram_id": spectrogram_id
     })
     coll_analyzes.update_one(
         {"_id": task["_id"]},
