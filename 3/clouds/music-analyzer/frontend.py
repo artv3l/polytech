@@ -4,7 +4,7 @@ import streamlit as st
 
 import common
 
-c_backend_url = "http://localhost:8080"
+c_backend_url = "http://backend:8080"
 
 def update_analyzes():
     response = requests.get(f"{c_backend_url}/analyzes")

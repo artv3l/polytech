@@ -29,7 +29,7 @@ app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
     '/metrics': make_wsgi_app()
 })
 
-mongo_client = MongoClient("mongodb://root:root@localhost:27017/")
+mongo_client = MongoClient("mongodb://root:root@mongo:27017/")
 file_db = gridfs.GridFS(mongo_client["cw"])
 coll_analyzes = mongo_client["cw"][params.names.coll_analyzes]
 coll_results = mongo_client["cw"][params.names.coll_results]
