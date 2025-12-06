@@ -4,11 +4,18 @@
 
 ```
 choco install spin -y
-choco install magicsplat-tcl-tk --version=1.11.2 -y
 choco install graphviz -y
 ```
 
-Скачать файл https://github.com/nimble-code/Spin/blob/master/optional_gui/ispin.tcl
+# GUI
+
+Для установки:
+
+```
+choco install magicsplat-tcl-tk --version=1.11.2 -y
+```
+
+Скачать файл: https://github.com/nimble-code/Spin/blob/master/optional_gui/ispin.tcl
 
 Отредактировать, в разделе "Tools" указать путь к spin:
 
