@@ -88,7 +88,7 @@ proctype resource_manager() {
                 wait_unlock[DIR_ED] ! false;
             :: (request[DIR_ES] && !intersection[2] && !intersection[5]) ->
                 intersection[2] = true;
-                intersection[3] = true;
+                intersection[5] = true;
                 wait_unlock[DIR_ES] ! false;
             :: (request[DIR_SD] && !intersection[5] && !intersection[3]) ->
                 intersection[5] = true;
