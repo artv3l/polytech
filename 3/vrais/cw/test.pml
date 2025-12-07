@@ -92,10 +92,8 @@ proctype resource_manager() {
     :: resource_request ? dir, type;
         if
         :: (type == acquire) ->
-            atomic {
-                request_count++;
-                request[dir] = request_count;
-            }
+            request_count++;
+            request[dir] = request_count;
         :: (type == release) ->
             set_intersections(dir, false);
             wait_unlock[dir] ! false;
@@ -147,10 +145,8 @@ proctype traffic_light_controller(byte dir) {
         if
         :: (sensor[dir] && !traffic_light[dir]) ->
             resource_request ! dir, acquire;
-            atomic {
-                wait_unlock[dir] ? _;
-                traffic_light[dir] = true;
-            }
+            wait_unlock[dir] ? _;
+            traffic_light[dir] = true;
         :: (!sensor[dir] && traffic_light[dir]) ->
             traffic_light[dir] = false;
             resource_request ! dir, release;
