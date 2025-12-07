@@ -1,8 +1,3 @@
-/*
-35, 39, 11, 2
-SD - DE, ES - DE, NE - ED, NS - SD
-*/
-
 #define DIR_ED 0
 #define DIR_ES 1
 #define DIR_SD 2
@@ -81,6 +76,7 @@ proctype resource_manager() {
         :: (type == release) ->
             request[dir] = false;
             set_intersections(dir, false);
+            wait_unlock[dir] ! false;
         :: else -> assert(false);
         fi
 
@@ -128,6 +124,7 @@ proctype traffic_light_controller(byte dir) {
         :: (!sensor[dir] && request[dir]) ->
             traffic_light[dir] = false;
             resource_request ! dir, release;
+            wait_unlock[dir] ? _;
         fi
     od
 }
@@ -159,7 +156,17 @@ init {
         run traffic_light_controller(DIR_ED);
         run traffic_light_controller(DIR_NE);
         run traffic_light_controller(DIR_ES);
+        run traffic_light_controller(DIR_SD);
+        run traffic_light_controller(DIR_NS);
+        run traffic_light_controller(DIR_DE);
     }
 }
 
-ltl test {[] !(traffic_light[DIR_ED] && traffic_light[DIR_NE])}
+ltl test1 {[] !(traffic_light[DIR_ED] && traffic_light[DIR_NE])}
+ltl test2 {[] !(traffic_light[DIR_ED] && traffic_light[DIR_NS])}
+ltl test3 {[] !(traffic_light[DIR_ES] && traffic_light[DIR_NE])}
+ltl test4 {[] !(traffic_light[DIR_ES] && traffic_light[DIR_SD])}
+ltl test5 {[] !(traffic_light[DIR_ES] && traffic_light[DIR_DE])}
+ltl test6 {[] !(traffic_light[DIR_NS] && traffic_light[DIR_SD])}
+ltl test7 {[] !(traffic_light[DIR_NS] && traffic_light[DIR_DE])}
+ltl test8 {[] !(traffic_light[DIR_SD] && traffic_light[DIR_DE])}
