@@ -49,19 +49,20 @@ proctype environment() {
     int dir;
     do
     :: 
-        atomic {
-            dir = 0;
-            do
-            :: dir < DIR_COUNT ->
-                if
-                :: (!sensor[dir]) -> sensor[dir] = true;
-                :: (traffic_light[dir] && sensor[dir]) -> sensor[dir] = false;
-                :: skip;
-                fi;
-                dir++;
-            :: else -> break
-            od
-        }
+        if
+        :: (!sensor[0] && !traffic_light[0]) -> sensor[0] = true;
+        :: (traffic_light[0] && sensor[0]) -> sensor[0] = false;
+        :: (!sensor[1] && !traffic_light[1]) -> sensor[1] = true;
+        :: (traffic_light[1] && sensor[1]) -> sensor[1] = false;
+        :: (!sensor[2] && !traffic_light[2]) -> sensor[2] = true;
+        :: (traffic_light[2] && sensor[2]) -> sensor[2] = false;
+        :: (!sensor[3] && !traffic_light[3]) -> sensor[3] = true;
+        :: (traffic_light[3] && sensor[3]) -> sensor[3] = false;
+        :: (!sensor[4] && !traffic_light[4]) -> sensor[4] = true;
+        :: (traffic_light[4] && sensor[4]) -> sensor[4] = false;
+        :: (!sensor[5] && !traffic_light[5]) -> sensor[5] = true;
+        :: (traffic_light[5] && sensor[5]) -> sensor[5] = false;
+        fi
     od
 }
 
@@ -74,7 +75,6 @@ proctype resource_manager() {
         :: (type == acquire) ->
             request[dir] = true;
         :: (type == release) ->
-            request[dir] = false;
             set_intersections(dir, false);
             wait_unlock[dir] ! false;
         :: else -> assert(false);
@@ -85,27 +85,33 @@ proctype resource_manager() {
             :: (request[DIR_ED] && !intersection[0] && !intersection[1]) ->
                 intersection[0] = true;
                 intersection[1] = true;
+                request[DIR_ED] = false;
                 wait_unlock[DIR_ED] ! false;
             :: (request[DIR_ES] && !intersection[2] && !intersection[5]) ->
                 intersection[2] = true;
                 intersection[5] = true;
+                request[DIR_ES] = false;
                 wait_unlock[DIR_ES] ! false;
             :: (request[DIR_SD] && !intersection[5] && !intersection[3]) ->
                 intersection[5] = true;
                 intersection[3] = true;
+                request[DIR_SD] = false;
                 wait_unlock[DIR_SD] ! false;
             :: (request[DIR_NS] && !intersection[1] && !intersection[3] && !intersection[4]) ->
                 intersection[1] = true;
                 intersection[3] = true;
                 intersection[4] = true;
+                request[DIR_NS] = false;
                 wait_unlock[DIR_NS] ! false;
             :: (request[DIR_DE] && !intersection[4] && !intersection[5]) ->
                 intersection[4] = true;
                 intersection[5] = true;
+                request[DIR_DE] = false;
                 wait_unlock[DIR_DE] ! false;
             :: (request[DIR_NE] && !intersection[0] && !intersection[2]) ->
                 intersection[0] = true;
                 intersection[2] = true;
+                request[DIR_NE] = false;
                 wait_unlock[DIR_NE] ! false;
             :: else -> skip;
             fi
@@ -121,7 +127,7 @@ proctype traffic_light_controller(byte dir) {
             resource_request ! dir, acquire;
             wait_unlock[dir] ? _;
             traffic_light[dir] = true;
-        :: (!sensor[dir] && request[dir]) ->
+        :: (!sensor[dir] && traffic_light[dir]) ->
             traffic_light[dir] = false;
             resource_request ! dir, release;
             wait_unlock[dir] ? _;
@@ -170,3 +176,5 @@ ltl test5 {[] !(traffic_light[DIR_ES] && traffic_light[DIR_DE])}
 ltl test6 {[] !(traffic_light[DIR_NS] && traffic_light[DIR_SD])}
 ltl test7 {[] !(traffic_light[DIR_NS] && traffic_light[DIR_DE])}
 ltl test8 {[] !(traffic_light[DIR_SD] && traffic_light[DIR_DE])}
+
+ltl test9 {[] ((sensor[DIR_ED] && !traffic_light[DIR_ED]) -> <> (traffic_light[DIR_ED]))}
