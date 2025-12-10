@@ -4,24 +4,31 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: root
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "127.0.0.1/test", "--eval", "'quit(db.runCommand({ ping: 1 }).ok ? 0 : 2)'"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
 
-  mongo-express:
-    image: mongo-express:1.0.2
-    # ports:
-    #   - 8081:8081
-    environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: root
-      ME_CONFIG_MONGODB_ADMINPASSWORD: root
-      ME_CONFIG_MONGODB_URL: mongodb://root:root@mongo:27017/
-      ME_CONFIG_BASICAUTH: false
-    
+  # mongo-express:
+  #   image: mongo-express:1.0.2
+  #   ports:
+  #     - 8081:8081
+  #   environment:
+  #     ME_CONFIG_MONGODB_ADMINUSERNAME: root
+  #     ME_CONFIG_MONGODB_ADMINPASSWORD: root
+  #     ME_CONFIG_MONGODB_URL: mongodb://root:root@mongo:27017/
+  #     ME_CONFIG_BASICAUTH: false
+
   prometheus:
     image: prom/prometheus:v3.7.3
     # ports:
     #   - 9090:9090
     volumes:
       - ./mount/prometheus.yml:/etc/prometheus/prometheus.yml
-  
+    depends_on:
+      - backend
+
   grafana:
     image: grafana/grafana:12.1
     volumes:
@@ -30,11 +37,16 @@ services:
       - ./mount/dashboards:/var/lib/grafana/dashboards
     ports:
       - 19761:3000
+    depends_on:
+      - prometheus
 
   backend:
     build:
       context: .
       dockerfile: backend.dockerfile
+    depends_on:
+      mongo:
+        condition: service_healthy
 
   frontend:
     build:
@@ -42,3 +54,5 @@ services:
       dockerfile: frontend.dockerfile
     ports:
       - 17532:8501
+    depends_on:
+      - backend
