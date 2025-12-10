@@ -9,8 +9,7 @@
 #define INTERSECTION_COUNT 6
 
 bool sensor[DIR_COUNT];
-byte request[DIR_COUNT];
-byte request_count;
+bool request[DIR_COUNT];
 bool traffic_light[DIR_COUNT];
 bool intersection[INTERSECTION_COUNT];
 
@@ -45,27 +44,8 @@ inline set_intersections(dir, value) {
     }
 }
 
-inline decrement_requests() {
-    atomic {
-        int i;
-        i = 0;
-        do
-        :: i < DIR_COUNT ->
-            if
-            :: request[i] > 0 -> request[i]--;
-            :: else -> skip;
-            fi
-            i++;
-        :: else -> break;
-        od
-
-        request_count--;
-    }
-}
-
 // Процесс, моделирующий внешнюю среду
 proctype environment() {
-    int dir;
     do
     ::
         if
@@ -92,8 +72,7 @@ proctype resource_manager() {
     :: resource_request ? dir, type;
         if
         :: (type == acquire) ->
-            request_count++;
-            request[dir] = request_count;
+            request[dir] = true;
         :: (type == release) ->
             set_intersections(dir, false);
             wait_unlock[dir] ! false;
@@ -102,36 +81,36 @@ proctype resource_manager() {
 
         atomic {
             if
-            :: (request[DIR_ED] == 1 && !intersection[0] && !intersection[1]) ->
+            :: (request[DIR_ED] && !intersection[0] && !intersection[1]) ->
                 intersection[0] = true;
                 intersection[1] = true;
-                decrement_requests();
+                request[DIR_ED] = false;
                 wait_unlock[DIR_ED] ! false;
-            :: (request[DIR_ES] == 1 && !intersection[2] && !intersection[5]) ->
+            :: (request[DIR_ES] && !intersection[2] && !intersection[5]) ->
                 intersection[2] = true;
                 intersection[5] = true;
-                decrement_requests();
+                request[DIR_ES] = false;
                 wait_unlock[DIR_ES] ! false;
-            :: (request[DIR_SD] == 1 && !intersection[5] && !intersection[3]) ->
+            :: (request[DIR_SD] && !intersection[5] && !intersection[3]) ->
                 intersection[5] = true;
                 intersection[3] = true;
-                decrement_requests();
+                request[DIR_SD] = false;
                 wait_unlock[DIR_SD] ! false;
-            :: (request[DIR_NS] == 1 && !intersection[1] && !intersection[3] && !intersection[4]) ->
+            :: (request[DIR_NS] && !intersection[1] && !intersection[3] && !intersection[4]) ->
                 intersection[1] = true;
                 intersection[3] = true;
                 intersection[4] = true;
-                decrement_requests();
+                request[DIR_NS] = false;
                 wait_unlock[DIR_NS] ! false;
-            :: (request[DIR_DE] == 1 && !intersection[4] && !intersection[5]) ->
+            :: (request[DIR_DE] && !intersection[4] && !intersection[5]) ->
                 intersection[4] = true;
                 intersection[5] = true;
-                decrement_requests();
+                request[DIR_DE] = false;
                 wait_unlock[DIR_DE] ! false;
-            :: (request[DIR_NE] == 1 && !intersection[0] && !intersection[2]) ->
+            :: (request[DIR_NE] && !intersection[0] && !intersection[2]) ->
                 intersection[0] = true;
                 intersection[2] = true;
-                decrement_requests();
+                request[DIR_NE] = false;
                 wait_unlock[DIR_NE] ! false;
             :: else -> skip;
             fi
@@ -157,14 +136,12 @@ proctype traffic_light_controller(byte dir) {
 
 init {
     atomic {
-        request_count = 0;
-
         int i;
         i = 0;
         do
         :: i < DIR_COUNT ->
             sensor[i] = false;
-            request[i] = 0;
+            request[i] = false;
             traffic_light[i] = false;
             i++;
         :: else -> break
