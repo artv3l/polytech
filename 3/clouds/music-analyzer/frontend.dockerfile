@@ -4,9 +4,9 @@ WORKDIR /app
 
 COPY frontend.py .
 COPY common.py .
-COPY requirements.txt .
+COPY requirements_frontend.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements_frontend.txt
 
 EXPOSE 8501
 

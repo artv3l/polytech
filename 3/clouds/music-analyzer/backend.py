@@ -84,18 +84,17 @@ def get_file(id: str):
     return Response(file.read(), mimetype="image/png")
 
 def analyze(task):
-    file = file_db.get(ObjectId(task["file_id"]))
-
     start_time = time.time()
-    y, sample_rate = librosa.load(file, sr=None)
+    with file_db.get(ObjectId(task["file_id"])) as f:
+        y, sample_rate = librosa.load(f, sr=None)
     tempo, _ = librosa.beat.beat_track(y=y, sr=sample_rate)
     
-    n_fft = 2048  # Window size: 2048 samples (adjust based on frequency resolution)  
-    stft_result = librosa.stft(y, n_fft=n_fft)
+    n_fft = 1024  # Window size: 2048 samples (adjust based on frequency resolution)  
+    stft_result = librosa.stft(y, n_fft=n_fft, hop_length=512)
     magnitude_spectrogram = np.abs(stft_result) # Compute magnitude spectrogram (absolute value of STFT result)
     db_spectrogram = librosa.amplitude_to_db(magnitude_spectrogram, ref=np.max) # Convert to dB scale (logarithmic)
 
-    fig, ax = plt.subplots(figsize=(6, 3))
+    fig, ax = plt.subplots(figsize=(4, 4), dpi=72)
     img = librosa.display.specshow(
         db_spectrogram,
         ax=ax,
@@ -111,6 +110,7 @@ def analyze(task):
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0)
+    plt.close(fig)
     buf.seek(0)
 
     audio_analysis_duration.observe(time.time() - start_time)
