@@ -8,15 +8,19 @@ from pymongo import MongoClient
 import gridfs
 import librosa
 from bson import ObjectId
-from prometheus_client import make_wsgi_app, Histogram
+from prometheus_client import make_wsgi_app, Histogram, Gauge
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 import numpy as np
+
+import matplotlib
+matplotlib.use("agg")
 import matplotlib.pyplot as plt
 
 import params
 import common
 
 request_latency = Histogram('flask_request_latency_seconds', 'Request latency', ['endpoint'])
+analyzer_status = Gauge('analyzer_status', 'Analyze thread status')
 
 audio_analysis_duration = Histogram(
     "audio_analysis_duration_seconds",
@@ -90,7 +94,7 @@ def analyze(task):
     magnitude_spectrogram = np.abs(stft_result) # Compute magnitude spectrogram (absolute value of STFT result)
     db_spectrogram = librosa.amplitude_to_db(magnitude_spectrogram, ref=np.max) # Convert to dB scale (logarithmic)
 
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(6, 3))
     img = librosa.display.specshow(
         db_spectrogram,
         ax=ax,
@@ -124,15 +128,21 @@ def analyze(task):
 
 def analyzer():
     while True:
-        task = coll_analyzes.find_one_and_update(
-            {"status": "waiting"},
-            {"$set": {"status": "running"}},
-            sort=[("created_at", 1)]
-        )
-        if task:
-            analyze(task)
+        try:
+            task = coll_analyzes.find_one_and_update(
+                {"status": "waiting"},
+                {"$set": {"status": "running"}},
+                sort=[("created_at", 1)]
+            )
+        except BaseException:
+            pass
         else:
-            time.sleep(1)
+            if task:
+                analyzer_status.set(f"Analyze {task["title"]}, time={time.time()}")
+                analyze(task)
+        
+        time.sleep(1)
+        analyzer_status.set(f"Waiting, time={time.time()}")
 
 if __name__ == "__main__":
     threading.Thread(target=analyzer, daemon=True).start()
