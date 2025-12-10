@@ -20,7 +20,8 @@ import params
 import common
 
 request_latency = Histogram('flask_request_latency_seconds', 'Request latency', ['endpoint'])
-analyzer_status = Gauge('analyzer_status', 'Analyze thread status')
+analyzes_count = Gauge('analyzes_count', 'Number of started analyzes')
+analyzer_status = Gauge('analyzer_status', 'Status of analyzer (0 - running, other - time)')
 
 audio_analysis_duration = Histogram(
     "audio_analysis_duration_seconds",
@@ -138,11 +139,12 @@ def analyzer():
             pass
         else:
             if task:
-                analyzer_status.set(f"Analyze {task["title"]}, time={time.time()}")
+                analyzer_status.set(0)
+                analyzes_count.inc()
                 analyze(task)
         
         time.sleep(1)
-        analyzer_status.set(f"Waiting, time={time.time()}")
+        analyzer_status.set(int(time.time()))
 
 if __name__ == "__main__":
     threading.Thread(target=analyzer, daemon=True).start()
